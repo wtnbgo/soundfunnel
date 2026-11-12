@@ -91,7 +91,8 @@ target_sources(SoundFunnel PRIVATE
     src/Autostart.cpp
     src/Localisation.cpp
     src/SelfTest.cpp
-    src/MicPermission.cpp)
+    src/MicPermission.cpp
+    src/LoopbackCapture.cpp)
 
 if (APPLE)
     target_sources(SoundFunnel PRIVATE src/MicPermission_mac.mm)

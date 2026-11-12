@@ -11,6 +11,7 @@ AppCore::AppCore (const Options& options) : config (options.profile), opts (opti
     engine.setFormat (config.getFormatIndex(), config.getSendChannels());
     engine.setJitterBufferMs (config.getJitterBufferMs());
     engine.setMonitorLocal (config.getMonitorLocalWhenServer());
+    applySendSource (config.getSendSource(), config.getLoopbackDevice(), false);
 
     if (engine.open (config.getAudioPort()) < 0)
         problem = TRANS ("Audio port could not be opened");
@@ -41,7 +42,8 @@ void AppCore::openAudioDevice (bool micAllowed)
     // restore the saved state or open defaults (2 in / 2 out);
     // with 0 channels requested JUCE ignores the saved device of that direction
     auto saved = config.getAudioDeviceState();
-    const bool in = opts.openInput && micAllowed;
+    // sending system audio needs no input device (and no microphone access)
+    const bool in = opts.openInput && micAllowed && ! isLoopbackSource();
     auto err = deviceManager.initialise (in ? 2 : 0, opts.openOutput ? 2 : 0, saved.get(), true);
     if (err.isNotEmpty()) Logger::writeToLog ("audio device: " + err);
 
@@ -170,7 +172,9 @@ String AppCore::getStatusText() const
         case Role::Client:
         {
             String s = TRANS ("Server: ") + getServerName();
+            const auto lbErr = engine.getLoopbackError();
             if (mutedByServer)                 s << " - " << TRANS ("Muted by the server");
+            else if (lbErr.isNotEmpty())       s << " - " << TRANS ("System audio: ") << lbErr;
             else if (config.getSendPaused())   s << " - " << TRANS ("Paused");
             else                               s << " - " << (engine.isServerReachable() ? TRANS ("Connected") : TRANS ("Connecting..."));
             return s;
@@ -263,6 +267,23 @@ void AppCore::applyFormat (int formatIndex, int channels, int jitterMs, bool mon
     engine.setFormat (formatIndex, channels);
     engine.setJitterBufferMs (jitterMs);
     engine.setMonitorLocal (monitorLocal);
+}
+
+void AppCore::applySendSource (AppConfig::Source src, const String& device, bool persist)
+{
+    if (persist)
+    {
+        config.setSendSource (src);
+        config.setLoopbackDevice (device);
+        config.save();
+    }
+    engine.setLoopback (src == AppConfig::Source::loopback && LoopbackCapture::isSupported(), device);
+    sendChangeMessage();
+}
+
+bool AppCore::isLoopbackSource() const
+{
+    return engine.isLoopbackEnabled();
 }
 
 void AppCore::saveAudioDeviceState()

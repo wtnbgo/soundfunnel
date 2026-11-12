@@ -77,6 +77,7 @@ AudioEngine::AudioEngine()
 
 AudioEngine::~AudioEngine()
 {
+    loopback.stop();
     if (recvThread) recvThread->signalThreadShouldExit();
     if (sendThread) sendThread->signalThreadShouldExit();
     sendEvent.signal();
@@ -152,13 +153,18 @@ AudioEngine::Endpoint* AudioEngine::endpointFor (const String& ip, int port)
 void AudioEngine::setupSource()
 {
     if (! source) return;
+    // the clock that drives the source: the loopback capture, or the audio device
+    const bool lb = loopbackOn.load() && lbRate > 0.0;
+    const double sr = lb ? lbRate : sampleRate;
+    const int bs = lb ? lbBlock : blockSize;
+    sourceRate = sr;
     aoo_format_storage f;
-    Codecs::toAooFormat (formatIndex, sendChannels, sampleRate, blockSize, f);
-    source->setup ((int32_t) sampleRate, blockSize, sendChannels);
+    Codecs::toAooFormat (formatIndex, sendChannels, sr, bs, f);
+    source->setup ((int32_t) sr, bs, sendChannels);
     source->set_format (f.header);
-    source->set_buffersize (jmax (10, (int) (4000.0 * blockSize / sampleRate)));
+    source->set_buffersize (jmax (10, (int) (4000.0 * bs / sr)));
     source->set_packetsize (kPacketSize);
-    sendBuffer.setSize (sendChannels, blockSize, false, true, true);
+    sendBuffer.setSize (sendChannels, bs, false, true, true);
 }
 
 void AudioEngine::setupSink (Sink& s)
@@ -263,6 +269,70 @@ void AudioEngine::setJitterBufferMs (int ms)
 }
 
 void AudioEngine::setSendEnabled (bool b)    { sendEnabled = b; }
+
+void AudioEngine::setLoopback (bool enabled, const String& deviceName)
+{
+    if (enabled == loopbackOn.load() && deviceName == loopbackDevice && enabled == loopback.isActive())
+        return;
+
+    loopback.stop();
+    {
+        const ScopedWriteLock sl (coreLock);
+        loopbackOn = enabled;
+        loopbackDevice = deviceName;
+        lbRate = 0.0;
+        lbFill = 0;
+        setupSource();
+        sourcePlaying = false;
+    }
+    if (enabled)
+        loopback.start (deviceName, [this] (const float* const* d, int nc, int n, double sr) { onLoopbackAudio (d, nc, n, sr); });
+}
+
+String AudioEngine::getLoopbackStatus() const
+{
+    if (! loopbackOn.load()) return {};
+    auto e = loopback.getLastError();
+    return e.isNotEmpty() ? e : loopback.getDescription();
+}
+
+void AudioEngine::onLoopbackAudio (const float* const* data, int numChannels, int numSamples, double sr)
+{
+    if (sr != lbRate)
+    {
+        // first audio, or the device's mix format changed: re-clock the source
+        const ScopedWriteLock sl (coreLock);
+        lbRate = sr;
+        lbBlock = jmax (64, roundToInt (sr * 0.01));     // 10 ms blocks
+        lbAccum.setSize (2, lbBlock, false, true, true);
+        lbFill = 0;
+        setupSource();
+        sourcePlaying = false;
+    }
+
+    // first two channels (front left / right) of whatever layout the device uses
+    const int chans = jmin (2, numChannels);
+    int pos = 0;
+    while (pos < numSamples)
+    {
+        const int take = jmin (numSamples - pos, lbBlock - lbFill);
+        for (int c = 0; c < chans; ++c)
+            lbAccum.copyFrom (c, lbFill, data[c] + pos, take);
+        lbFill += take;
+        pos += take;
+
+        if (lbFill == lbBlock)
+        {
+            lbFill = 0;
+            {
+                const ScopedReadLock sl (coreLock);
+                if (role == Role::Client && source && loopbackOn.load())
+                    processClientBlock (lbAccum.getArrayOfReadPointers(), chans, lbBlock, aoo_osctime_get());
+            }
+            sendEvent.signal();
+        }
+    }
+}
 void AudioEngine::setMonitorLocal (bool b)   { monitorLocal = b; }
 
 void AudioEngine::setClientMuted (const String& nodeId, bool m)
@@ -374,6 +444,66 @@ void AudioEngine::audioDeviceAboutToStart (AudioIODevice* device)
 
 void AudioEngine::audioDeviceStopped() {}
 
+void AudioEngine::processClientBlock (const float* const* in, int numIn, int numSamples, uint64_t t)
+{
+    if (numSamples > sendBuffer.getNumSamples()) return;
+
+    bool want = sendEnabled.load();
+    if (want != sourcePlaying)
+    {
+        source->set_option (want ? aoo_opt_start : aoo_opt_stop, nullptr, 0);
+        sourcePlaying = want;
+        stopBlocksLeft = want ? 0 : kStopFlushBlocks;
+    }
+
+    // After aoo_opt_stop the AOO source fades out and pushes a little silence, but
+    // if process() keeps being fed it goes back to encoding the live input and never
+    // finishes flushing, so it keeps streaming. Feed silence for a few blocks to let
+    // the fade-out through, then stop calling process() so its queue drains.
+    if (! want)
+    {
+        sendLevel = 0.0f;
+        if (stopBlocksLeft > 0)
+        {
+            --stopBlocksLeft;
+            sendBuffer.clear (0, numSamples);
+            source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
+        }
+    }
+    else
+    {
+        // map device inputs to the send channel count
+        float peak = 0.0f;
+        for (int c = 0; c < sendChannels; ++c)
+        {
+            auto* dst = sendBuffer.getWritePointer (c);
+            if (testTone.load())
+            {
+                auto ph = tonePhase;
+                const auto inc = MathConstants<double>::twoPi * 440.0 / sourceRate;
+                for (int i = 0; i < numSamples; ++i, ph += inc) dst[i] = 0.1f * (float) std::sin (ph);
+                if (c == sendChannels - 1) tonePhase = std::fmod (ph, MathConstants<double>::twoPi);
+            }
+            else if (numIn == 0)
+                FloatVectorOperations::clear (dst, numSamples);
+            else if (sendChannels == 1 && numIn >= 2)
+            {
+                FloatVectorOperations::copyWithMultiply (dst, in[0], 0.5f, numSamples);
+                FloatVectorOperations::addWithMultiply (dst, in[1], 0.5f, numSamples);
+            }
+            else
+                FloatVectorOperations::copy (dst, in[jmin (c, numIn - 1)], numSamples);
+
+            auto r = FloatVectorOperations::findMinAndMax (dst, numSamples);
+            peak = jmax (peak, std::abs (r.getStart()), std::abs (r.getEnd()));
+        }
+        const float lv = jmax (peak, sendLevel.load() * 0.9f);
+        sendLevel = lv < 1.0e-5f ? 0.0f : lv;
+
+        source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
+    }
+}
+
 void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int numIn,
                                                     float* const* out, int numOut,
                                                     int numSamples,
@@ -388,66 +518,10 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
 
     auto t = aoo_osctime_get();
 
-    if (role == Role::Client && source)
-    {
-        bool want = sendEnabled.load();
-        if (want != sourcePlaying)
-        {
-            source->set_option (want ? aoo_opt_start : aoo_opt_stop, nullptr, 0);
-            sourcePlaying = want;
-            stopBlocksLeft = want ? 0 : kStopFlushBlocks;
-        }
-
-        // After aoo_opt_stop the AOO source fades out and pushes a little silence, but
-        // if process() keeps being fed it goes back to encoding the live input and never
-        // finishes flushing, so it keeps streaming. Feed silence for a few blocks to let
-        // the fade-out through, then stop calling process() so its queue drains.
-        if (! want)
-        {
-            sendLevel = 0.0f;
-            if (stopBlocksLeft > 0)
-            {
-                --stopBlocksLeft;
-                sendBuffer.clear (0, numSamples);
-                source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
-            }
-        }
-        else
-        {
-            // map device inputs to the send channel count
-            float peak = 0.0f;
-            for (int c = 0; c < sendChannels; ++c)
-            {
-                auto* dst = sendBuffer.getWritePointer (c);
-                if (testTone.load())
-                {
-                    auto ph = tonePhase;
-                    const auto inc = MathConstants<double>::twoPi * 440.0 / sampleRate;
-                    for (int i = 0; i < numSamples; ++i, ph += inc) dst[i] = 0.1f * (float) std::sin (ph);
-                    if (c == sendChannels - 1) tonePhase = std::fmod (ph, MathConstants<double>::twoPi);
-                }
-                else if (numIn == 0)
-                    FloatVectorOperations::clear (dst, numSamples);
-                else if (sendChannels == 1 && numIn >= 2)
-                {
-                    FloatVectorOperations::copyWithMultiply (dst, in[0], 0.5f, numSamples);
-                    FloatVectorOperations::addWithMultiply (dst, in[1], 0.5f, numSamples);
-                }
-                else
-                    FloatVectorOperations::copy (dst, in[jmin (c, numIn - 1)], numSamples);
-
-                auto r = FloatVectorOperations::findMinAndMax (dst, numSamples);
-                peak = jmax (peak, std::abs (r.getStart()), std::abs (r.getEnd()));
-            }
-            sendLevel = jmax (peak, sendLevel.load() * 0.9f);
-
-            source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
-        }
-    }
-    else
-    {
+    if (role == Role::Client && source && ! loopbackOn.load())
+        processClientBlock (in, numIn, numSamples, t);
+    else if (role != Role::Client)
         sendLevel = 0.0f;
-    }
 
     if (role == Role::Server)
     {

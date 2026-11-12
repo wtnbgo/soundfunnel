@@ -59,6 +59,9 @@ public:
     // settings changed in the UI
     void applyIdentity (const juce::String& name, const juce::String& groupKey);
     void applyFormat (int formatIndex, int channels, int jitterMs, bool monitorLocal);
+    /** persist = false: only for this run (command line testing). */
+    void applySendSource (AppConfig::Source, const juce::String& loopbackDevice, bool persist = true);
+    bool isLoopbackSource() const;
     void saveAudioDeviceState();
     bool isAudioDeviceOpened() const                { return audioOpened; }
 

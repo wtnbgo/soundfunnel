@@ -6,6 +6,7 @@
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include "aoo/aoo.hpp"
+#include "LoopbackCapture.h"
 
 class AudioEngine : public juce::AudioIODeviceCallback
 {
@@ -44,6 +45,13 @@ public:
     void setClientMuted (const juce::String& nodeId, bool);
     void setClientGain (const juce::String& nodeId, float);
 
+    /** Client: send what this PC plays (system audio) instead of the input device.
+        deviceName empty = the default output. */
+    void setLoopback (bool enabled, const juce::String& deviceName);
+    bool isLoopbackEnabled() const      { return loopbackOn.load(); }
+    juce::String getLoopbackStatus() const;   // device description, or the error; empty when off
+    juce::String getLoopbackError() const     { return loopbackOn.load() ? loopback.getLastError() : juce::String(); }
+
     // --- status (any thread) -------------------------------------------------
     std::vector<ClientStatus> getClientStatus() const;
     float getSendLevel() const          { return sendLevel.load(); }
@@ -72,6 +80,8 @@ private:
     Endpoint* endpointFor (const juce::String& ip, int port);   // call with write lock held
     void setupSource();                                         // call with write lock held
     void setupSink (Sink&);                                     // call with write lock held
+    void processClientBlock (const float* const* in, int numIn, int numSamples, uint64_t t);   // read lock held
+    void onLoopbackAudio (const float* const* data, int numChannels, int numSamples, double sr);
     void doReceive();
     void doSend();
     void handleEvents();
@@ -105,9 +115,19 @@ private:
 
     // shared settings
     int formatIndex = 0, sendChannels = 2, jitterMs = 40;
-    double sampleRate = 48000.0;
+    double sampleRate = 48000.0;          // audio device
+    double sourceRate = 48000.0;          // what the AOO source is set up for (device or loopback)
     int blockSize = 512;
     int outChannels = 2;
+
+    // loopback (system audio) source: its own thread drives the AOO source
+    LoopbackCapture loopback;
+    std::atomic<bool> loopbackOn { false };
+    juce::String loopbackDevice;
+    double lbRate = 0.0;                    // 0 until the first audio arrives
+    int lbBlock = 480;
+    juce::AudioBuffer<float> lbAccum;
+    int lbFill = 0;
 
     std::atomic<float> sendLevel { 0.0f };
     std::atomic<juce::uint64> rx { 0 }, rxRouted { 0 }, rxDropped { 0 }, tx { 0 }, callbacks { 0 };

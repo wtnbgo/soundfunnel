@@ -74,14 +74,19 @@ public:
         // Decided before the core starts, so the device is never opened even briefly.
         const bool testTone = args.contains ("--test-tone");
         const bool silent = args.contains ("--silent");
+        // --loopback: send what this PC plays instead of the input (this run only;
+        // --loopback-device NAME picks an output device, default = the default output)
+        const bool loopbackArg = args.contains ("--loopback");
         AppCore::Options opts;
         opts.profile = argValue (args, "--profile");
         opts.openOutput = ! silent;
-        opts.openInput = ! (testTone && ! silent);
+        opts.openInput = ! loopbackArg && ! (testTone && ! silent);
 
         Logger::writeToLog (String ("starting core (input ") + (opts.openInput ? "on" : "off") + ", output " + (opts.openOutput ? "on" : "off") + ")");
         core = std::make_unique<AppCore> (opts);
         core->getEngine().setTestTone (testTone);
+        if (loopbackArg)
+            core->applySendSource (AppConfig::Source::loopback, argValue (args, "--loopback-device"), false);
         Logger::writeToLog ("core started: " + core->getStatusText() + ", audio port " + String (core->getEngine().getPort()));
 
         settings = std::make_unique<SettingsWindow> (*core, [this] { systemRequestedQuit(); });
@@ -169,6 +174,9 @@ public:
             if (auto* dev = core->getDeviceManager().getCurrentAudioDevice())
                 o->setProperty ("device", dev->getName() + " / " + String (dev->getCurrentSampleRate()) + " Hz / "
                                 + String (dev->getCurrentBufferSizeSamples()) + " / out " + String (dev->getActiveOutputChannels().countNumberOfSetBits()));
+            if (core->getEngine().isLoopbackEnabled())
+                o->setProperty ("loopback", core->getEngine().getLoopbackStatus());
+            o->setProperty ("sendLevel", core->getEngine().getSendLevel());
             Array<var> members;
             for (auto& m : core->getMembers())
             {

@@ -39,6 +39,13 @@ public:
     bool getMonitorLocalWhenServer() const;
     void setMonitorLocalWhenServer (bool);
 
+    // what a client sends: the audio input device, or what this PC plays (loopback)
+    enum class Source { input = 0, loopback = 1 };
+    Source getSendSource() const;
+    void setSendSource (Source);
+    juce::String getLoopbackDevice() const;    // empty = the default output
+    void setLoopbackDevice (const juce::String&);
+
     bool getSendPaused() const;
     void setSendPaused (bool);
 

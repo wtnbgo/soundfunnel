@@ -2,6 +2,7 @@
 #include "SettingsWindow.h"
 #include "Autostart.h"
 #include "Codecs.h"
+#include "LoopbackCapture.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -194,6 +195,49 @@ namespace
         {
             auto& cfg = core.getConfig();
 
+            // what to send: the input device, or what this PC plays
+            addLabel (sourceLabel, TRANS ("Send"));
+            source.addItem (TRANS ("Audio input (microphone / line in)"), 1);
+            source.addItem (TRANS ("System audio (what this PC plays)"), 2);
+            source.setItemEnabled (2, LoopbackCapture::isSupported());
+            source.setSelectedId (cfg.getSendSource() == AppConfig::Source::loopback && LoopbackCapture::isSupported() ? 2 : 1,
+                                  dontSendNotification);
+            addAndMakeVisible (source);
+
+            addLabel (lbDeviceLabel, TRANS ("Capture from"));
+            lbDevice.addItem (TRANS ("Default output device"), 1);
+            int lid = 2, sel = 1;
+            for (auto& n : LoopbackCapture::getDeviceNames())
+            {
+                if (n == cfg.getLoopbackDevice()) sel = lid;
+                lbDevice.addItem (n, lid++);
+            }
+            if (cfg.getLoopbackDevice().isNotEmpty() && sel == 1)
+            {
+                // remembered device is not connected right now: keep it selectable
+                lbDevice.addItem (cfg.getLoopbackDevice(), lid);
+                sel = lid;
+            }
+            lbDevice.setSelectedId (sel, dontSendNotification);
+            addAndMakeVisible (lbDevice);
+
+            if (! LoopbackCapture::isSupported())
+            {
+                lbNote.setText (TRANS ("Sending system audio is available on Windows for now."), dontSendNotification);
+                lbNote.setColour (Label::textColourId, Colours::grey);
+                addAndMakeVisible (lbNote);
+            }
+
+            auto applySource = [this] {
+                const bool lb = source.getSelectedId() == 2;
+                const auto dev = lbDevice.getSelectedId() <= 1 ? String() : lbDevice.getText();
+                core.applySendSource (lb ? AppConfig::Source::loopback : AppConfig::Source::input, dev);
+                lbDevice.setEnabled (lb);
+            };
+            source.onChange = applySource;
+            lbDevice.onChange = applySource;
+            lbDevice.setEnabled (source.getSelectedId() == 2);
+
             addLabel (codecLabel, TRANS ("Codec"));
             int id = 1;
             for (auto& f : Codecs::all()) codec.addItem (f.name, id++);
@@ -232,6 +276,9 @@ namespace
             auto r = getLocalBounds().reduced (12);
             auto row = [&r] { auto x = r.removeFromTop (28); r.removeFromTop (8); return x; };
             auto put = [] (Rectangle<int> x, Label& l, Component& c) { l.setBounds (x.removeFromLeft (170)); c.setBounds (x); };
+            put (row(), sourceLabel, source);
+            put (row(), lbDeviceLabel, lbDevice);
+            if (lbNote.isVisible()) lbNote.setBounds (row());
             put (row(), codecLabel, codec);
             put (row(), channelsLabel, channels);
             put (row(), jitterLabel, jitter);
@@ -242,8 +289,8 @@ namespace
         void addLabel (Label& l, const String& t) { l.setText (t, dontSendNotification); addAndMakeVisible (l); }
 
         AppCore& core;
-        Label codecLabel, channelsLabel, jitterLabel;
-        ComboBox codec, channels;
+        Label sourceLabel, lbDeviceLabel, lbNote, codecLabel, channelsLabel, jitterLabel;
+        ComboBox source, lbDevice, codec, channels;
         Slider jitter;
         ToggleButton monitor;
     };
@@ -339,7 +386,7 @@ namespace
             auto bg = findColour (ResizableWindow::backgroundColourId);
             addTab (TRANS ("Status"), bg, new StatusPage (core, std::move (onQuit)), true);
             addTab (TRANS ("Audio"), bg, new AudioPage (core), true);
-            addTab (TRANS ("Send format"), bg, new FormatPage (core), true);
+            addTab (TRANS ("Sending"), bg, new FormatPage (core), true);
             addTab (TRANS ("Group"), bg, new GroupPage (core), true);
             if (core.getConfig().getGroupKey().isEmpty())
                 setCurrentTabIndex (3);
