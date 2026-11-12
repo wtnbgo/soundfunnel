@@ -85,6 +85,7 @@ private:
     void doReceive();
     void doSend();
     void handleEvents();
+    void retryServerHandshake();                                // send thread
 
     enum class Role { Idle, Client, Server };
 
@@ -104,6 +105,7 @@ private:
     int stopBlocksLeft = 0;                             // audio thread only
     static constexpr int kStopFlushBlocks = 16;
     std::atomic<juce::uint32> lastServerPingMs { 0 };
+    std::atomic<juce::uint32> lastSinkAddMs { 0 };
     juce::AudioBuffer<float> sendBuffer;
 
     // server side

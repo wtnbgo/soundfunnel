@@ -119,6 +119,7 @@ int AudioEngine::open (int port)
         sendEvent.wait (20);
         doSend();
         handleEvents();
+        retryServerHandshake();
     });
     recvThread->startThread (Thread::Priority::highest);
     sendThread->startThread (Thread::Priority::highest);
@@ -214,6 +215,7 @@ void AudioEngine::setClient (const String& myNodeId, const String& serverIp, int
     int32_t flags = AOO_PROTOCOL_FLAG_COMPACT_DATA;
     source->set_sinkoption (ep, id, aoo_opt_protocol_flags, &flags, sizeof (flags));
     lastServerPingMs = 0;
+    lastSinkAddMs = Time::getMillisecondCounter();
 }
 
 void AudioEngine::setServer (const std::vector<ClientEndpoint>& clients)
@@ -400,6 +402,26 @@ void AudioEngine::doReceive()
             ++rxRouted;
         }
     }
+}
+
+void AudioEngine::retryServerHandshake()
+{
+    // The AOO source announces its format once, when the sink is added. If the server has not
+    // learned about us yet at that moment (e.g. it just restarted on a new port and our beacon
+    // has not reached it), it drops that message; compact data carries no source id, so it can
+    // never ask for the format again. Until the server's sink answers, add it again every 2 s.
+    const auto now = Time::getMillisecondCounter();
+    if (now - lastSinkAddMs.load() < 2000) return;
+
+    const ScopedReadLock sl (coreLock);
+    if (role != Role::Client || ! source || serverEndpoint == nullptr || ! sendEnabled.load() || isServerReachable())
+        return;
+
+    lastSinkAddMs = now;
+    source->remove_all();
+    source->add_sink (serverEndpoint, sourceSinkId, endpointSend);
+    int32_t flags = AOO_PROTOCOL_FLAG_COMPACT_DATA;
+    source->set_sinkoption (serverEndpoint, sourceSinkId, aoo_opt_protocol_flags, &flags, sizeof (flags));
 }
 
 void AudioEngine::doSend()
