@@ -26,7 +26,14 @@ public:
         float level = 0.0f;
     };
 
-    explicit AppCore (const juce::String& profile);
+    struct Options
+    {
+        juce::String profile;
+        bool openInput = true;      // false: never open an input device (no microphone prompt)
+        bool openOutput = true;     // false: never open an output device
+    };
+
+    explicit AppCore (const Options&);
     ~AppCore() override;
 
     AppConfig& getConfig()                          { return config; }

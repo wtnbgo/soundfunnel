@@ -3,11 +3,12 @@
 
 using namespace juce;
 
-AppCore::AppCore (const String& profile) : config (profile)
+AppCore::AppCore (const Options& options) : config (options.profile)
 {
     // audio device: restore saved state or open defaults (2 in / 2 out)
     auto saved = config.getAudioDeviceState();
-    auto err = deviceManager.initialise (2, 2, saved.get(), true);
+    // with 0 channels requested JUCE ignores the saved device of that direction
+    auto err = deviceManager.initialise (options.openInput ? 2 : 0, options.openOutput ? 2 : 0, saved.get(), true);
     if (err.isNotEmpty()) DBG ("audio device: " << err);
     deviceManager.addAudioCallback (&engine);
 

@@ -68,25 +68,21 @@ public:
 
         Localisation::install();
 
-        Logger::writeToLog ("starting core");
-        core = std::make_unique<AppCore> (argValue (args, "--profile"));
-        Logger::writeToLog ("core started: " + core->getStatusText() + ", audio port " + String (core->getEngine().getPort()));
-
+        // --silent: testing on one PC, never open an output device (avoids mic -> speaker feedback).
+        // --test-tone: the input's audio is not used, so don't open it (no microphone permission
+        // prompt), unless it is the only device left: something has to drive the audio callback.
+        // Decided before the core starts, so the device is never opened even briefly.
         const bool testTone = args.contains ("--test-tone");
+        const bool silent = args.contains ("--silent");
+        AppCore::Options opts;
+        opts.profile = argValue (args, "--profile");
+        opts.openOutput = ! silent;
+        opts.openInput = ! (testTone && ! silent);
+
+        Logger::writeToLog (String ("starting core (input ") + (opts.openInput ? "on" : "off") + ", output " + (opts.openOutput ? "on" : "off") + ")");
+        core = std::make_unique<AppCore> (opts);
         core->getEngine().setTestTone (testTone);
-        if (testTone || args.contains ("--silent"))
-        {
-            auto& dm = core->getDeviceManager();
-            auto setup = dm.getAudioDeviceSetup();
-            // --silent: testing on one PC, never open an output device (avoids mic -> speaker feedback).
-            // --test-tone: the input's audio is not used, so skip it (no microphone permission prompt)
-            // unless it is the only device left: something has to drive the audio callback.
-            const bool silent = args.contains ("--silent");
-            if (silent) setup.outputDeviceName = {};
-            if (testTone && ! silent) setup.inputDeviceName = {};
-            auto err = dm.setAudioDeviceSetup (setup, true);
-            Logger::writeToLog ("test audio setup: in='" + setup.inputDeviceName + "' out='" + setup.outputDeviceName + "' " + err);
-        }
+        Logger::writeToLog ("core started: " + core->getStatusText() + ", audio port " + String (core->getEngine().getPort()));
         if (auto* dev = core->getDeviceManager().getCurrentAudioDevice())
             Logger::writeToLog ("audio device: " + dev->getName() + " " + String (dev->getCurrentSampleRate()) + " Hz");
         else
