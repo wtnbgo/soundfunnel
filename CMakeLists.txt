@@ -1,13 +1,17 @@
 cmake_minimum_required(VERSION 3.22)
 
+# Must be set before project(). JUCE 7 calls CGWindowListCreateImage, which the
+# macOS 15+ SDKs mark unavailable when the deployment target is 15 or newer (the
+# default is the host OS version), so pin an older target explicitly.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
+# JUCE builds its juceaide helper in a nested CMake run that only inherits the
+# environment, so pass the same target that way too.
+set(ENV{MACOSX_DEPLOYMENT_TARGET} "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+
 project(SoundFunnel VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-if (APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
-endif()
 
 if (MSVC)
     # static CRT so the app runs without the VC++ redistributable
