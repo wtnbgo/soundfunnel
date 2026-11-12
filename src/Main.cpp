@@ -16,6 +16,9 @@ int runSelfTest();   // SelfTest.cpp
 
 namespace
 {
+    std::atomic<bool> terminateRequested { false };
+    void onTerminateSignal (int) { terminateRequested = true; }
+
     String argValue (const StringArray& args, const String& name)
     {
         auto i = args.indexOf (name);
@@ -43,6 +46,10 @@ public:
        #if JUCE_MAC || JUCE_LINUX || JUCE_BSD
         // A write to a closed pipe/socket must report EPIPE, not kill a resident app.
         std::signal (SIGPIPE, SIG_IGN);
+        // SIGTERM / SIGINT (kill, logout, Ctrl+C): leave through the normal shutdown path
+        std::signal (SIGTERM, onTerminateSignal);
+        std::signal (SIGINT, onTerminateSignal);
+        signalWatcher = std::make_unique<SignalWatcher> (*this);
        #endif
 
         // --log-file F : write startup steps and problems to F (diagnostics)
@@ -113,6 +120,20 @@ public:
         Logger::writeToLog ("initialised");
     }
 
+    struct SignalWatcher : public Timer
+    {
+        explicit SignalWatcher (SoundFunnelApplication& a) : app (a) { startTimer (200); }
+        void timerCallback() override
+        {
+            if (terminateRequested.exchange (false))
+            {
+                Logger::writeToLog ("termination signal received");
+                app.systemRequestedQuit();
+            }
+        }
+        SoundFunnelApplication& app;
+    };
+
     struct DiagTimer : public Timer
     {
         explicit DiagTimer (SoundFunnelApplication& a) : app (a) { startTimer (1000); }
@@ -174,6 +195,7 @@ public:
     void shutdown() override
     {
         Logger::writeToLog ("shutdown");
+        signalWatcher.reset();
         diag.reset();
         tray.reset();
         settings.reset();
@@ -195,6 +217,7 @@ private:
     std::unique_ptr<TrayIcon> tray;
     std::unique_ptr<DiagTimer> diag;
     std::unique_ptr<FileLogger> logger;
+    std::unique_ptr<SignalWatcher> signalWatcher;
     String statusFile, controlFile;
 };
 

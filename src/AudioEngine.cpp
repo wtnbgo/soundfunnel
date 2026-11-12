@@ -158,8 +158,6 @@ void AudioEngine::setupSource()
     source->set_format (f.header);
     source->set_buffersize (jmax (10, (int) (4000.0 * blockSize / sampleRate)));
     source->set_packetsize (kPacketSize);
-    int32_t flags = AOO_PROTOCOL_FLAG_COMPACT_DATA;
-    source->set_option (aoo_opt_protocol_flags, &flags, sizeof (flags));
     sendBuffer.setSize (sendChannels, blockSize, false, true, true);
 }
 
@@ -206,6 +204,9 @@ void AudioEngine::setClient (const String& myNodeId, const String& serverIp, int
     serverEndpoint = ep;
     sourceSinkId = id;
     source->add_sink (ep, id, endpointSend);
+    // protocol flags are a per-sink option on the source side (as in SonoBus)
+    int32_t flags = AOO_PROTOCOL_FLAG_COMPACT_DATA;
+    source->set_sinkoption (ep, id, aoo_opt_protocol_flags, &flags, sizeof (flags));
     lastServerPingMs = 0;
 }
 
