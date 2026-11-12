@@ -1,4 +1,4 @@
-// spsync - aggregate audio from several PCs on a LAN to one server PC.
+// SoundFunnel - aggregate audio from several PCs on a LAN to one server PC.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 

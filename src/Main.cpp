@@ -1,4 +1,4 @@
-// spsync - aggregate audio from several PCs on a LAN to one server PC.
+// SoundFunnel - aggregate audio from several PCs on a LAN to one server PC.
 // Based on SonoBus (https://www.sonobus.net, Copyright (C) Jesse Chappell), GPLv3.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -22,7 +22,7 @@ namespace
     }
 }
 
-class SpsyncApplication : public JUCEApplication
+class SoundFunnelApplication : public JUCEApplication
 {
 public:
     const String getApplicationName() override       { return JUCE_APPLICATION_NAME_STRING; }
@@ -81,9 +81,9 @@ public:
 
     struct DiagTimer : public Timer
     {
-        explicit DiagTimer (SpsyncApplication& a) : app (a) { startTimer (1000); }
+        explicit DiagTimer (SoundFunnelApplication& a) : app (a) { startTimer (1000); }
         void timerCallback() override { app.diagTick(); }
-        SpsyncApplication& app;
+        SoundFunnelApplication& app;
     };
 
     void diagTick()
@@ -160,4 +160,4 @@ private:
     String statusFile, controlFile;
 };
 
-START_JUCE_APPLICATION (SpsyncApplication)
+START_JUCE_APPLICATION (SoundFunnelApplication)

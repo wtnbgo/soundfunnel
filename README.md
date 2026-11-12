@@ -1,4 +1,4 @@
-# spsync
+# SoundFunnel
 
 LAN 内の複数 PC の音を、1 台の「サーバ」PC に集めて再生する常駐アプリです（Windows / macOS / Linux）。
 
@@ -17,7 +17,7 @@ LAN 内の複数 PC の音を、1 台の「サーバ」PC に集めて再生す�
 Linux では ALSA・JACK・X11・freetype などの開発パッケージも必要です（JUCE の Linux 依存パッケージ）。
 
 ```bash
-git clone --recursive <this repo>
+git clone --recursive https://github.com/wtnbgo/soundfunnel.git
 ```
 
 ```bash
@@ -25,7 +25,7 @@ cmake -S . -B build
 ```
 
 ```bash
-cmake --build build --config Release --target spsync
+cmake --build build --config Release --target SoundFunnel
 ```
 
 Opus はビルド時に自動で取得します（FetchContent）。

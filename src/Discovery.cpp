@@ -16,7 +16,7 @@ using namespace juce;
 
 namespace
 {
-    constexpr char kMagic[4] = { 'S', 'P', 'S', 'Y' };
+    constexpr char kMagic[4] = { 'S', 'F', 'N', 'L' };
     constexpr uint8 kProtoVersion = 1;
     constexpr size_t kHeaderSize = 4 + 1 + 8 + 2;
     constexpr size_t kMacSize = 32;
@@ -50,7 +50,7 @@ namespace
 
     MemoryBlock groupId (const String& key)
     {
-        auto s = ("spsync-group:" + key);
+        auto s = ("soundfunnel-group:" + key);
         auto h = sha256 (s.toRawUTF8(), s.getNumBytesAsUTF8());
         h.setSize (8);
         return h;
@@ -83,7 +83,7 @@ namespace
 }
 
 //==============================================================================
-Discovery::Discovery() : Thread ("spsync discovery") {}
+Discovery::Discovery() : Thread ("SoundFunnel discovery") {}
 
 Discovery::~Discovery()
 {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// `spsync --selftest` : protocol checks that need no network or audio device.
+// `SoundFunnel --selftest` : protocol checks that need no network or audio device.
 #include <juce_core/juce_core.h>
 #include "Discovery.h"
 #include "AudioEngine.h"

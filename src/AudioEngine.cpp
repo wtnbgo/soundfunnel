@@ -105,10 +105,10 @@ int AudioEngine::open (int port)
     int sz = 1 << 20;
     setsockopt ((decltype (socket->getRawSocketHandle())) socket->getRawSocketHandle(), SOL_SOCKET, SO_RCVBUF, (const char*) &sz, sizeof (sz));
 
-    recvThread = std::make_unique<NetThread> ("spsync recv", [this] {
+    recvThread = std::make_unique<NetThread> ("SoundFunnel recv", [this] {
         if (socket->waitUntilReady (true, 20) == 1) doReceive();
     });
-    sendThread = std::make_unique<NetThread> ("spsync send", [this] {
+    sendThread = std::make_unique<NetThread> ("SoundFunnel send", [this] {
         sendEvent.wait (20);
         doSend();
         handleEvents();

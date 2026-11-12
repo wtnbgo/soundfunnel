@@ -343,7 +343,7 @@ namespace
 
 //==============================================================================
 SettingsWindow::SettingsWindow (AppCore& core)
-    : DocumentWindow ("spsync - " + TRANS ("Settings"),
+    : DocumentWindow ("SoundFunnel - " + TRANS ("Settings"),
                       LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
                       DocumentWindow::closeButton | DocumentWindow::minimiseButton)
 {

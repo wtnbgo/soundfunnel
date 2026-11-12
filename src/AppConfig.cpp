@@ -7,9 +7,9 @@ using namespace juce;
 AppConfig::AppConfig (const String& p) : profile (p)
 {
     PropertiesFile::Options o;
-    o.applicationName     = profile.isEmpty() ? "spsync" : "spsync-" + profile;
+    o.applicationName     = profile.isEmpty() ? "SoundFunnel" : "SoundFunnel-" + profile;
     o.filenameSuffix      = ".settings";
-    o.folderName          = "spsync";
+    o.folderName          = "SoundFunnel";
     o.osxLibrarySubFolder = "Application Support";
     o.storageFormat       = PropertiesFile::storeAsXML;
     props = std::make_unique<PropertiesFile> (o);

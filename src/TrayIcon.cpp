@@ -53,7 +53,7 @@ void TrayIcon::refresh()
         auto img = makeIcon (shownRole, 64);
         setIconImage (img, img);
     }
-    setIconTooltip ("spsync - " + core.getStatusText());
+    setIconTooltip ("SoundFunnel - " + core.getStatusText());
 }
 
 void TrayIcon::changeListenerCallback (ChangeBroadcaster*) { refresh(); }

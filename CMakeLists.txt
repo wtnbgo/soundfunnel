@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(spsync VERSION 0.1.0 LANGUAGES C CXX)
+project(SoundFunnel VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,9 +29,9 @@ FetchContent_Declare(opus
 FetchContent_MakeAvailable(opus)
 
 # AOO includes <opus/opus_multistream.h>; expose the headers under an opus/ prefix
-set(SPSYNC_OPUS_INC "${CMAKE_BINARY_DIR}/opus_inc")
+set(SF_OPUS_INC "${CMAKE_BINARY_DIR}/opus_inc")
 file(GLOB _opus_headers "${opus_SOURCE_DIR}/include/*.h")
-file(COPY ${_opus_headers} DESTINATION "${SPSYNC_OPUS_INC}/opus")
+file(COPY ${_opus_headers} DESTINATION "${SF_OPUS_INC}/opus")
 
 # ---------------------------------------------------------------- AOO (from SonoBus)
 set(AOO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/aoo")
@@ -51,7 +51,7 @@ add_library(aoo STATIC
     ${AOO_DIR}/deps/oscpack/osc/OscPrintReceivedElements.cpp
     ${AOO_DIR}/deps/oscpack/osc/OscReceivedElements.cpp
     ${AOO_DIR}/deps/oscpack/osc/OscTypes.cpp)
-target_include_directories(aoo PUBLIC ${AOO_DIR}/lib ${AOO_DIR}/deps ${SPSYNC_OPUS_INC})
+target_include_directories(aoo PUBLIC ${AOO_DIR}/lib ${AOO_DIR}/deps ${SF_OPUS_INC})
 target_compile_definitions(aoo PUBLIC AOO_STATIC USE_CODEC_OPUS=1 AOO_TIMEFILTER_CHECK=0)
 target_link_libraries(aoo PUBLIC opus)
 if (WIN32)
@@ -66,16 +66,16 @@ endif()
 # ---------------------------------------------------------------- JUCE
 add_subdirectory(third_party/JUCE EXCLUDE_FROM_ALL)
 
-juce_add_gui_app(spsync
-    PRODUCT_NAME "spsync"
-    COMPANY_NAME "spsync"
-    BUNDLE_ID "net.spsync.app"
+juce_add_gui_app(SoundFunnel
+    PRODUCT_NAME "SoundFunnel"
+    COMPANY_NAME "wtnbgo"
+    BUNDLE_ID "io.github.wtnbgo.soundfunnel"
     VERSION ${PROJECT_VERSION}
     MICROPHONE_PERMISSION_ENABLED TRUE
-    MICROPHONE_PERMISSION_TEXT "spsync sends the selected audio input to the server PC on your LAN."
+    MICROPHONE_PERMISSION_TEXT "SoundFunnel sends the selected audio input to the server PC on your LAN."
     PLIST_TO_MERGE "<plist><dict><key>LSUIElement</key><true/></dict></plist>")
 
-target_sources(spsync PRIVATE
+target_sources(SoundFunnel PRIVATE
     src/Main.cpp
     src/AppConfig.cpp
     src/AppCore.cpp
@@ -88,20 +88,20 @@ target_sources(spsync PRIVATE
     src/Localisation.cpp
     src/SelfTest.cpp)
 
-target_compile_definitions(spsync PRIVATE
+target_compile_definitions(SoundFunnel PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_REPORT_APP_USAGE=0
-    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:spsync,JUCE_PRODUCT_NAME>"
-    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:spsync,JUCE_VERSION>"
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:SoundFunnel,JUCE_PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:SoundFunnel,JUCE_VERSION>"
     JUCE_WASAPI=1
     JUCE_DIRECTSOUND=0
     JUCE_ASIO=0
     JUCE_ALSA=1
     JUCE_JACK=1)
 
-target_link_libraries(spsync PRIVATE
+target_link_libraries(SoundFunnel PRIVATE
     aoo
     juce::juce_audio_devices
     juce::juce_audio_utils
