@@ -60,14 +60,19 @@ public:
     void applyIdentity (const juce::String& name, const juce::String& groupKey);
     void applyFormat (int formatIndex, int channels, int jitterMs, bool monitorLocal);
     void saveAudioDeviceState();
+    bool isAudioDeviceOpened() const                { return audioOpened; }
 
 private:
     void discoveryChanged() override;
     void reconcile();
     void pushLocalInfo();
     ServerClaim highestKnownClaim() const;
+    void openAudioDevice (bool micAllowed);
 
     AppConfig config;
+    Options opts;
+    std::shared_ptr<bool> alive = std::make_shared<bool> (true);
+    bool audioOpened = false;
     juce::AudioDeviceManager deviceManager;
     AudioEngine engine;
     Discovery discovery;

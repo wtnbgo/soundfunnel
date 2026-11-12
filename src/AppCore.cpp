@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AppCore.h"
+#include "MicPermission.h"
 
 using namespace juce;
 
-AppCore::AppCore (const Options& options) : config (options.profile)
+AppCore::AppCore (const Options& options) : config (options.profile), opts (options)
 {
-    // audio device: restore saved state or open defaults (2 in / 2 out)
-    auto saved = config.getAudioDeviceState();
-    // with 0 channels requested JUCE ignores the saved device of that direction
-    auto err = deviceManager.initialise (options.openInput ? 2 : 0, options.openOutput ? 2 : 0, saved.get(), true);
-    if (err.isNotEmpty()) DBG ("audio device: " << err);
     deviceManager.addAudioCallback (&engine);
 
     engine.setFormat (config.getFormatIndex(), config.getSendChannels());
@@ -25,10 +21,42 @@ AppCore::AppCore (const Options& options) : config (options.profile)
         problem = TRANS ("Discovery port is in use");
 
     reconcile();
+
+    // The audio device is opened once microphone access is settled (see MicPermission.h).
+    // Discovery and the UI run meanwhile, so a pending prompt never freezes the app.
+    if (MicPermission::current() == MicPermission::Status::undetermined)
+        Logger::writeToLog ("waiting for microphone permission");
+
+    std::weak_ptr<bool> weak = alive;
+    MicPermission::request ([this, weak] (bool granted)
+    {
+        if (weak.expired()) return;
+        if (! granted) Logger::writeToLog ("microphone permission denied: input stays closed");
+        openAudioDevice (granted);
+    });
+}
+
+void AppCore::openAudioDevice (bool micAllowed)
+{
+    // restore the saved state or open defaults (2 in / 2 out);
+    // with 0 channels requested JUCE ignores the saved device of that direction
+    auto saved = config.getAudioDeviceState();
+    const bool in = opts.openInput && micAllowed;
+    auto err = deviceManager.initialise (in ? 2 : 0, opts.openOutput ? 2 : 0, saved.get(), true);
+    if (err.isNotEmpty()) Logger::writeToLog ("audio device: " + err);
+
+    if (auto* dev = deviceManager.getCurrentAudioDevice())
+        Logger::writeToLog ("audio device: " + dev->getName() + " " + String (dev->getCurrentSampleRate()) + " Hz");
+    else
+        Logger::writeToLog ("audio device: none");
+
+    audioOpened = true;
+    sendChangeMessage();
 }
 
 AppCore::~AppCore()
 {
+    alive.reset();
     discovery.setListener (nullptr);
     discovery.stop();
     deviceManager.removeAudioCallback (&engine);

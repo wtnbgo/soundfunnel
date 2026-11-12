@@ -89,6 +89,7 @@ private:
     std::unique_ptr<juce::DatagramSocket> socket;
     std::vector<NetInterface> interfaces;
     juce::uint32 lastInterfaceRefresh = 0;
+    juce::StringArray loggedSendErrors;   // discovery thread only
 
     mutable juce::CriticalSection lock;
     LocalInfo local;

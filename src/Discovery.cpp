@@ -11,6 +11,8 @@
  #include <arpa/inet.h>
  #include <ifaddrs.h>
  #include <net/if.h>
+ #include <cerrno>
+ #include <cstring>
 #endif
 
 #include "Discovery.h"
@@ -327,17 +329,40 @@ void Discovery::sendBeacon()
 
     auto fd = socket->getRawSocketHandle();
 
+    auto sendTo = [&] (const String& dest, const String& via)
+    {
+        if (socket->write (dest, kPort, pkt.getData(), (int) pkt.getSize()) > 0)
+        {
+            ++sent;
+            return;
+        }
+       #if defined (_WIN32)
+        const int err = WSAGetLastError();
+        const String reason (err);
+       #else
+        const int err = errno;
+        const String reason = String (err) + " " + std::strerror (err);
+       #endif
+        // log each distinct failure once so a broken route shows up without flooding the log
+        const auto key = dest + "|" + via + "|" + String (err);
+        if (++sendErrors, ! loggedSendErrors.contains (key) && loggedSendErrors.size() < 32)
+        {
+            loggedSendErrors.add (key);
+            Logger::writeToLog ("discovery send to " + dest + " via " + via + " failed: " + reason);
+        }
+    };
+
     for (auto& a : interfaces)
     {
         // multicast out of this interface
         in_addr ifaddr {};
         inet_pton (AF_INET, a.address.toRawUTF8(), &ifaddr);
         setsockopt ((decltype (fd)) fd, IPPROTO_IP, IP_MULTICAST_IF, (const char*) &ifaddr, sizeof (ifaddr));
-        (socket->write (kMulticastGroup, kPort, pkt.getData(), (int) pkt.getSize()) > 0 ? sent : sendErrors)++;
+        sendTo (kMulticastGroup, a.address);
 
         // directed broadcast as a fallback for networks that drop multicast
         if (a.broadcast.isNotEmpty())
-            (socket->write (a.broadcast, kPort, pkt.getData(), (int) pkt.getSize()) > 0 ? sent : sendErrors)++;
+            sendTo (a.broadcast, a.address);
     }
 }
 

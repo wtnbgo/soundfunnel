@@ -77,7 +77,7 @@ juce_add_gui_app(SoundFunnel
     VERSION ${PROJECT_VERSION}
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "SoundFunnel sends the selected audio input to the server PC on your LAN."
-    PLIST_TO_MERGE "<plist><dict><key>LSUIElement</key><true/></dict></plist>")
+    PLIST_TO_MERGE "<plist><dict><key>LSUIElement</key><true/><key>NSLocalNetworkUsageDescription</key><string>SoundFunnel finds the other PCs of your group on the local network and sends audio to the server PC.</string></dict></plist>")
 
 target_sources(SoundFunnel PRIVATE
     src/Main.cpp
@@ -90,7 +90,13 @@ target_sources(SoundFunnel PRIVATE
     src/TrayIcon.cpp
     src/Autostart.cpp
     src/Localisation.cpp
-    src/SelfTest.cpp)
+    src/SelfTest.cpp
+    src/MicPermission.cpp)
+
+if (APPLE)
+    target_sources(SoundFunnel PRIVATE src/MicPermission_mac.mm)
+    target_link_libraries(SoundFunnel PRIVATE "-framework AVFoundation")
+endif()
 
 target_compile_definitions(SoundFunnel PRIVATE
     JUCE_WEB_BROWSER=0

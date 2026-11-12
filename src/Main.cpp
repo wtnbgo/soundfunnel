@@ -83,10 +83,6 @@ public:
         core = std::make_unique<AppCore> (opts);
         core->getEngine().setTestTone (testTone);
         Logger::writeToLog ("core started: " + core->getStatusText() + ", audio port " + String (core->getEngine().getPort()));
-        if (auto* dev = core->getDeviceManager().getCurrentAudioDevice())
-            Logger::writeToLog ("audio device: " + dev->getName() + " " + String (dev->getCurrentSampleRate()) + " Hz");
-        else
-            Logger::writeToLog ("audio device: none");
 
         settings = std::make_unique<SettingsWindow> (*core, [this] { systemRequestedQuit(); });
 
