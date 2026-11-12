@@ -341,7 +341,7 @@ void Discovery::sendBeacon()
         const String reason (err);
        #else
         const int err = errno;
-        const String reason = String (err) + " " + std::strerror (err);
+        const String reason = String (err) + " " + String (std::strerror (err));
        #endif
         // log each distinct failure once so a broken route shows up without flooding the log
         const auto key = dest + "|" + via + "|" + String (err);
