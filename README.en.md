@@ -43,7 +43,9 @@ Allow both permission prompts:
 ## Usage
 
 1. SoundFunnel lives in the tray (menu bar on macOS). On first start the group key page opens.
-   On Linux it runs as a normal window (closing it minimises it).
+   On Linux it uses the tray when an AppIndicator / StatusNotifierItem host is running
+   (on GNOME: the AppIndicator extension); otherwise it runs as a normal window
+   (closing it minimises it).
 2. Set the same **group key** on every PC (Group tab). Only PCs with the same key see each other.
 3. On the PC that should play the audio, press **Make this PC the server** (Status tab).
    Pressing it on another PC later moves the server there.

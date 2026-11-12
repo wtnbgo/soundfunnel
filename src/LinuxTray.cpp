@@ -34,6 +34,15 @@ struct LinuxTray::Api
     void  (*app_indicator_set_icon_full) (void*, const char*, const char*) = nullptr;
     void  (*app_indicator_set_title) (void*, const char*) = nullptr;
 
+    // GIO / GLib, to ask D-Bus whether a tray host is running
+    void* (*g_bus_get_sync) (int, void*, void**) = nullptr;
+    void* (*g_variant_new) (const char*, ...) = nullptr;
+    void* (*g_dbus_connection_call_sync) (void*, const char*, const char*, const char*, const char*,
+                                          void*, const void*, int, int, void*, void**) = nullptr;
+    void  (*g_variant_get) (void*, const char*, ...) = nullptr;
+    void  (*g_variant_unref) (void*) = nullptr;
+    void  (*g_error_free) (void*) = nullptr;
+
     bool ok = false;
 
     Api()
@@ -63,10 +72,39 @@ struct LinuxTray::Api
           && get (app_indicator_set_status, "app_indicator_set_status")
           && get (app_indicator_set_menu, "app_indicator_set_menu")
           && get (app_indicator_set_icon_full, "app_indicator_set_icon_full")
-          && get (app_indicator_set_title, "app_indicator_set_title");
+          && get (app_indicator_set_title, "app_indicator_set_title")
+          && get (g_bus_get_sync, "g_bus_get_sync")
+          && get (g_variant_new, "g_variant_new")
+          && get (g_dbus_connection_call_sync, "g_dbus_connection_call_sync")
+          && get (g_variant_get, "g_variant_get")
+          && get (g_variant_unref, "g_variant_unref")
+          && get (g_error_free, "g_error_free");
 
-        if (ok)
-            ok = gtk_init_check (nullptr, nullptr) != 0;   // false when there is no display
+        // gtk_init_check is done in create(), only when a tray host exists
+    }
+
+    /** True when a StatusNotifierItem host is on the session bus. Without one the indicator
+        is invisible (or may fall back to an XEmbed icon), so the tray must not be used. */
+    bool trayHostRunning()
+    {
+        constexpr int kBusSession = 2;
+        void* err = nullptr;
+        void* bus = g_bus_get_sync (kBusSession, nullptr, &err);
+        if (bus == nullptr) { if (err) g_error_free (err); return false; }
+
+        int has = 0;
+        void* reply = g_dbus_connection_call_sync (bus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                                                   "org.freedesktop.DBus", "NameHasOwner",
+                                                   g_variant_new ("(s)", "org.kde.StatusNotifierWatcher"),
+                                                   nullptr, 0, 1000, nullptr, &err);
+        if (reply != nullptr)
+        {
+            g_variant_get (reply, "(b)", &has);
+            g_variant_unref (reply);
+        }
+        if (err) g_error_free (err);
+        g_object_unref (bus);
+        return has != 0;
     }
 
     static Api& get()
@@ -90,6 +128,18 @@ std::unique_ptr<LinuxTray> LinuxTray::create (AppCore& c, std::function<void()> 
     if (! api.ok)
     {
         Logger::writeToLog ("tray: AppIndicator library not available, running as a window");
+        return {};
+    }
+    if (! api.trayHostRunning())
+    {
+        // e.g. GNOME without the AppIndicator extension
+        Logger::writeToLog ("tray: no StatusNotifierWatcher on the session bus, running as a window");
+        return {};
+    }
+    static const bool gtkReady = api.gtk_init_check (nullptr, nullptr) != 0;
+    if (! gtkReady)
+    {
+        Logger::writeToLog ("tray: GTK could not be initialised, running as a window");
         return {};
     }
     return std::unique_ptr<LinuxTray> (new LinuxTray (c, api, std::move (o), std::move (q)));

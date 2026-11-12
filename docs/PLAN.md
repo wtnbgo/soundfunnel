@@ -159,9 +159,10 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
 
 ### 既知の課題・TODO
 
-- Linux のトレイ: JUCE の Linux 版トレイ (XEmbed) を GNOME (Wayland/Xwayland) に埋め込むと、
-  gnome-shell が BadWindow で abort した。いまは Linux ではトレイを作らず、通常のウィンドウで動かしている。
-  StatusNotifierItem (D-Bus / AppIndicator) での実装を M5 で検討する。
+- Linux のトレイ: JUCE の Linux 版トレイ (XEmbed) は GNOME で gnome-shell を落としたため使わない。
+  libayatana-appindicator を dlopen して StatusNotifierItem で出すようにした。D-Bus に
+  org.kde.StatusNotifierWatcher がない環境（AppIndicator 拡張が無効な GNOME など）では作らず、ウィンドウで動く。
+  拡張が有効な環境でアイコンが出ることは未確認。
 - macOS: ad-hoc 署名だとビルドのたびに別アプリ扱いになり、マイクとローカルネットワークの許可を
   毎回取り直す。固定の Developer ID で署名・公証する (M6)。初回起動時の許可の案内も UI に出したい。
 - サーバでの受信レベルが、Mac から（0.14）と Windows・Linux から（0.10）で少し違った。
