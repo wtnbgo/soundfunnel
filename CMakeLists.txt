@@ -82,7 +82,7 @@ juce_add_gui_app(SoundFunnel
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png"
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "SoundFunnel sends the selected audio input to the server PC on your LAN."
-    PLIST_TO_MERGE "<plist><dict><key>LSUIElement</key><true/><key>NSLocalNetworkUsageDescription</key><string>SoundFunnel finds the other PCs of your group on the local network and sends audio to the server PC.</string></dict></plist>")
+    PLIST_TO_MERGE "<plist><dict><key>LSUIElement</key><true/><key>NSLocalNetworkUsageDescription</key><string>SoundFunnel finds the other PCs of your group on the local network and sends audio to the server PC.</string><key>NSAudioCaptureUsageDescription</key><string>SoundFunnel sends what this Mac plays to the server PC when System audio is selected.</string></dict></plist>")
 
 target_sources(SoundFunnel PRIVATE
     src/Main.cpp
@@ -96,11 +96,15 @@ target_sources(SoundFunnel PRIVATE
     src/Autostart.cpp
     src/Localisation.cpp
     src/SelfTest.cpp
-    src/MicPermission.cpp
-    src/LoopbackCapture.cpp)
+    src/MicPermission.cpp)
 
 if (APPLE)
-    target_sources(SoundFunnel PRIVATE src/MicPermission_mac.mm)
+    target_sources(SoundFunnel PRIVATE src/MicPermission_mac.mm src/LoopbackCapture_mac.mm)
+else()
+    target_sources(SoundFunnel PRIVATE src/LoopbackCapture.cpp)
+endif()
+
+if (APPLE)
     target_link_libraries(SoundFunnel PRIVATE "-framework AVFoundation")
 endif()
 
