@@ -96,9 +96,9 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
 
 | OS | 方法 | 予定 |
 |---|---|---|
-| Windows | WASAPI ループバック（出力デバイスを録音） | **独自 AudioIODeviceType を追加（M4）**。それまでは VB-CABLE 等の仮想デバイスで代用可 |
+| Windows | WASAPI ループバック（出力デバイスを録音） | **実装済み（M4）**。`LoopbackCapture` が取り込みスレッドで AOO の source を直接駆動する（オーディオデバイス不要） |
 | macOS | 14.2+ の Core Audio Process Tap / それ以前は BlackHole 等の仮想デバイス | M5 で Process Tap を検討。当面は仮想デバイス |
-| Linux | PulseAudio / PipeWire の monitor ソース | JUCE の ALSA 経由で `pulse` を選び、monitor を既定入力に設定すれば可。M5 で案内を整備 |
+| Linux | PulseAudio / PipeWire の monitor ソース | **実装済み（M5）**。libpulse-simple を dlopen し `@DEFAULT_MONITOR@` を読む |
 
 ### 3.5 常駐動作
 
@@ -115,9 +115,9 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
 | M1 | リポジトリ・CMake・JUCE/AOO/Opus のビルド基盤、トレイ常駐の空アプリ | 3 OS でビルドが通る（まず Windows） |
 | M2 | 検出 + サーバ選出 + 設定画面（キー・名前・仲間一覧） | 1 台で複数起動して仲間表示とサーバ移動ができる |
 | M3 | AOO 音声転送（client→server）、クライアント別ミュート、形式設定 | 2 台で音が届き、ミュートが効く |
-| M4 | Windows WASAPI ループバック入力 | PC の再生音をそのまま送れる |
+| M4 ✅ | Windows WASAPI ループバック入力 | PC の再生音をそのまま送れる |
 | M5 | macOS / Linux の再生音取得、各 OS の動作確認 | 3 OS 混在で集約できる |
-| M6 | インストーラ・自動起動・アイコン・README・CI | 配布物ができる |
+| M6（一部） | インストーラ・自動起動・アイコン・README・CI | 配布物ができる（署名・公証は未） |
 
 ### 進捗（2026-11-12）
 
@@ -139,6 +139,18 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
   答えが出るまで CoreAudio がブロックしてアプリ全体が固まっていた。
   AVFoundation でマイク許可を先に確認・要求し、答えが出てからデバイスを開くようにした。
 
+### 進捗（2026-11-13）
+
+- M4: Windows でシステムの音（WASAPI ループバック）を送れるようにした。
+  - 送信タブの「送るもの」で切り替え。出力デバイスを選べる（既定は既定の出力デバイスに追従し、切り替えにも追従）。
+  - 何も再生していない間は WASAPI がデータを送らないので、実時間で無音を補って送信を途切れさせない。
+  - 同じ PC のサーバ（出力なし）へ送り、テスト音のレベルが届くこと、ミュートで送信が止まることを確認した。
+- M6 の一部: GitHub Actions で 3 OS のビルド・自己テスト・パッケージ作成を自動化した。
+  Windows は Inno Setup のインストーラと portable zip、macOS はユニバーサルの dmg、Linux は .deb と tar.gz。
+  タグ `vX.Y.Z` を push すると下書きのリリースを作る（手順は [BUILDING.md](BUILDING.md)）。
+- アプリアイコンを追加した（`tools/make_icon.py` で生成）。
+- ドキュメント: README（日本語 / 英語）、[BUILDING.md](BUILDING.md)、[TESTING.md](TESTING.md)、CHANGELOG を整備した。
+
 ### 既知の課題・TODO
 
 - Linux のトレイ: JUCE の Linux 版トレイ (XEmbed) を GNOME (Wayland/Xwayland) に埋め込むと、
@@ -148,6 +160,10 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
   毎回取り直す。固定の Developer ID で署名・公証する (M6)。初回起動時の許可の案内も UI に出したい。
 - サーバでの受信レベルが、Mac から（0.14）と Windows・Linux から（0.10）で少し違った。
   サンプルレート変換かピークの測り方によるものとみられる。実害はないが、あとで確認する。
+- macOS のシステムの音の取り込み（M5）: macOS 14.2+ の Core Audio Process Tap を検討する。
+  当面は仮想デバイス経由で案内している。
+- Linux のシステムの音: いまは既定の出力のモニタのみ。出力デバイスの選択（sink の列挙）は未対応。
+- Windows インストーラの実機での確認（CI でビルドのみ確認）。
 - 音声デバイスを 1 つも開いていないとオーディオのコールバックが動かず、サーバが受信音を処理できない。
   出力デバイスがないサーバ向けに、タイマーで処理を進める仕組みを検討する。
 

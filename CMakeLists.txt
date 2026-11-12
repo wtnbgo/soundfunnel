@@ -125,6 +125,10 @@ if (APPLE)
         VERBATIM)
 endif()
 
+if (UNIX AND NOT APPLE)
+    target_link_libraries(SoundFunnel PRIVATE ${CMAKE_DL_LIBS})   # libpulse-simple is dlopen'ed
+endif()
+
 target_link_libraries(SoundFunnel PRIVATE
     aoo
     juce::juce_audio_devices
@@ -161,5 +165,5 @@ set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};SoundFunnel;app;/")
 set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libpulse0")   # system audio capture (dlopen)
 include(CPack)

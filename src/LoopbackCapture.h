@@ -7,7 +7,9 @@
 /** Captures what this PC plays ("system audio") from an output device.
 
     Windows: WASAPI loopback on a render endpoint (shared mode).
-    Other platforms: not supported yet (macOS / Linux are planned, see docs/PLAN.md).
+    Linux:   the monitor source of the default output via PulseAudio / PipeWire
+             (libpulse-simple, loaded at run time).
+    macOS:   not supported yet (see docs/PLAN.md); use a virtual device such as BlackHole.
 
     Audio is delivered on an internal thread in the device's mix format,
     converted to float, non-interleaved. WASAPI delivers no packets while nothing

@@ -340,6 +340,113 @@ void LoopbackCapture::run()
     }
 }
 
+#elif JUCE_LINUX || JUCE_BSD
+//==============================================================================
+// PulseAudio / PipeWire (pipewire-pulse): read the monitor source of an output.
+// libpulse-simple is loaded at run time so the build does not depend on it.
+#include <dlfcn.h>
+
+namespace
+{
+    struct pa_sample_spec_ { int format; uint32_t rate; uint8_t channels; };
+    struct pa_buffer_attr_ { uint32_t maxlength, tlength, prebuf, minreq, fragsize; };
+    constexpr int PA_STREAM_RECORD_ = 2;
+    constexpr int PA_SAMPLE_FLOAT32LE_ = 5;
+
+    using pa_simple_new_t   = void* (*) (const char*, const char*, int, const char*, const char*,
+                                         const pa_sample_spec_*, const void*, const pa_buffer_attr_*, int*);
+    using pa_simple_read_t  = int (*) (void*, void*, size_t, int*);
+    using pa_simple_free_t  = void (*) (void*);
+
+    struct PulseSimple
+    {
+        PulseSimple()
+        {
+            lib = dlopen ("libpulse-simple.so.0", RTLD_NOW | RTLD_LOCAL);
+            if (lib == nullptr) return;
+            create = (pa_simple_new_t)  dlsym (lib, "pa_simple_new");
+            read   = (pa_simple_read_t) dlsym (lib, "pa_simple_read");
+            free   = (pa_simple_free_t) dlsym (lib, "pa_simple_free");
+        }
+        bool ok() const { return create != nullptr && read != nullptr && free != nullptr; }
+
+        void* lib = nullptr;
+        pa_simple_new_t create = nullptr;
+        pa_simple_read_t read = nullptr;
+        pa_simple_free_t free = nullptr;
+    };
+
+    PulseSimple& pulse()
+    {
+        static PulseSimple p;
+        return p;
+    }
+}
+
+bool LoopbackCapture::isSupported()            { return pulse().ok(); }
+StringArray LoopbackCapture::getDeviceNames()  { return {}; }   // only "the default output" for now
+
+void LoopbackCapture::run()
+{
+    auto& pa = pulse();
+    if (! pa.ok())
+    {
+        setError ("PulseAudio / PipeWire (libpulse-simple) is not available");
+        return;
+    }
+
+    constexpr double sr = 48000.0;
+    constexpr int chans = 2;
+    constexpr int frames = 480;                     // 10 ms per read
+    // a device name is a PulseAudio source; the default output's monitor otherwise
+    const String source = requestedDevice.isEmpty() ? String ("@DEFAULT_MONITOR@") : requestedDevice;
+
+    while (! threadShouldExit())
+    {
+        pa_sample_spec_ spec { PA_SAMPLE_FLOAT32LE_, (uint32_t) sr, (uint8_t) chans };
+        pa_buffer_attr_ attr { (uint32_t) -1, (uint32_t) -1, (uint32_t) -1, (uint32_t) -1,
+                               (uint32_t) (frames * chans * sizeof (float)) };
+        int err = 0;
+        void* s = pa.create (nullptr, "SoundFunnel", PA_STREAM_RECORD_, source.toRawUTF8(),
+                             "system audio", &spec, nullptr, &attr, &err);
+        if (s == nullptr)
+        {
+            setError ("cannot open " + source + " (error " + String (err) + ")");
+            wait (2000);
+            continue;
+        }
+
+        setError ({});
+        {
+            const ScopedLock sl (infoLock);
+            description = source + " 48000 Hz 2 ch";
+        }
+        Logger::writeToLog ("loopback: capturing " + source);
+
+        std::vector<float> interleaved ((size_t) (frames * chans));
+        AudioBuffer<float> buf (chans, frames);
+
+        while (! threadShouldExit())
+        {
+            // monitor sources stream continuously (silence included), so no gap filling here
+            if (pa.read (s, interleaved.data(), interleaved.size() * sizeof (float), &err) < 0)
+            {
+                setError ("capture stopped (error " + String (err) + "), restarting");
+                break;
+            }
+            for (int c = 0; c < chans; ++c)
+            {
+                auto* d = buf.getWritePointer (c);
+                for (int i = 0; i < frames; ++i) d[i] = interleaved[(size_t) (i * chans + c)];
+            }
+            if (callback) callback (buf.getArrayOfReadPointers(), chans, frames, sr);
+        }
+
+        pa.free (s);
+        wait (500);
+    }
+}
+
 #else
 //==============================================================================
 bool LoopbackCapture::isSupported()            { return false; }

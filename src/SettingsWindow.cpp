@@ -223,7 +223,7 @@ namespace
 
             if (! LoopbackCapture::isSupported())
             {
-                lbNote.setText (TRANS ("Sending system audio is available on Windows for now."), dontSendNotification);
+                lbNote.setText (TRANS ("Sending system audio is not available here yet. Use a virtual audio device as the input instead."), dontSendNotification);
                 lbNote.setColour (Label::textColourId, Colours::grey);
                 addAndMakeVisible (lbNote);
             }

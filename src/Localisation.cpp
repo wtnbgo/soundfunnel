@@ -21,7 +21,7 @@ countries: jp
 "System audio (what this PC plays)" = "システムの音 (このPCで再生中の音)"
 "Capture from" = "取り込む出力先"
 "Default output device" = "既定の出力デバイス"
-"Sending system audio is available on Windows for now." = "システムの音の送信は、現在 Windows でのみ使えます。"
+"Sending system audio is not available here yet. Use a virtual audio device as the input instead." = "この環境ではシステムの音を直接送れません。仮想オーディオデバイスを入力に選んでください。"
 "System audio: " = "システムの音: "
 "Group" = "グループ"
 "Quit" = "終了"
