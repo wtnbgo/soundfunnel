@@ -9,6 +9,9 @@
 #include "Localisation.h"
 #include "SettingsWindow.h"
 #include "TrayIcon.h"
+#if JUCE_LINUX || JUCE_BSD
+ #include "LinuxTray.h"
+#endif
 
 using namespace juce;
 
@@ -89,16 +92,31 @@ public:
             core->applySendSource (AppConfig::Source::loopback, argValue (args, "--loopback-device"), false);
         Logger::writeToLog ("core started: " + core->getStatusText() + ", audio port " + String (core->getEngine().getPort()));
 
+       #if JUCE_LINUX || JUCE_BSD
+        // AppIndicator tray when available; created first so the window knows whether it can hide
+        linuxTray = LinuxTray::create (*core,
+                                       [this] { if (settings) settings->showAndFocus(); },
+                                       [this] { systemRequestedQuit(); });
+        SettingsWindow::setTrayAvailable (linuxTray != nullptr);
+       #endif
+
         settings = std::make_unique<SettingsWindow> (*core, [this] { systemRequestedQuit(); });
 
         const bool background = args.contains ("--background") && core->getConfig().getGroupKey().isNotEmpty();
 
        #if JUCE_LINUX || JUCE_BSD
-        // No tray on Linux: JUCE's Linux tray icon uses XEmbed, and on GNOME (Wayland/Xwayland)
-        // embedding it crashed gnome-shell with BadWindow. Run as a normal window instead;
-        // "background" starts it minimised.
-        settings->showAndFocus();
-        if (background) settings->setMinimised (true);
+        // JUCE's Linux tray icon (XEmbed) crashed gnome-shell, so it is never used.
+        // With the AppIndicator tray the window behaves as on the other OSes; without it
+        // the app runs as a normal window and "background" starts it minimised.
+        if (linuxTray != nullptr)
+        {
+            if (! background) settings->showAndFocus();
+        }
+        else
+        {
+            settings->showAndFocus();
+            if (background) settings->setMinimised (true);
+        }
        #else
         tray = std::make_unique<TrayIcon> (*core,
                                            [this] { settings->showAndFocus(); },
@@ -201,6 +219,9 @@ public:
         signalWatcher.reset();
         diag.reset();
         tray.reset();
+       #if JUCE_LINUX || JUCE_BSD
+        linuxTray.reset();
+       #endif
         settings.reset();
         core.reset();
         Logger::setCurrentLogger (nullptr);
@@ -218,6 +239,9 @@ private:
     std::unique_ptr<AppCore> core;
     std::unique_ptr<SettingsWindow> settings;
     std::unique_ptr<TrayIcon> tray;
+   #if JUCE_LINUX || JUCE_BSD
+    std::unique_ptr<LinuxTray> linuxTray;
+   #endif
     std::unique_ptr<DiagTimer> diag;
     std::unique_ptr<FileLogger> logger;
     std::unique_ptr<SignalWatcher> signalWatcher;

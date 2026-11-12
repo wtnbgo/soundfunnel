@@ -396,14 +396,17 @@ namespace
 }
 
 //==============================================================================
-bool SettingsWindow::hasTray()
+namespace
 {
    #if JUCE_LINUX || JUCE_BSD
-    return false;
+    bool trayAvailable = false;   // only when the AppIndicator tray could be created
    #else
-    return true;
+    bool trayAvailable = true;
    #endif
 }
+
+bool SettingsWindow::hasTray()               { return trayAvailable; }
+void SettingsWindow::setTrayAvailable (bool b) { trayAvailable = b; }
 
 SettingsWindow::SettingsWindow (AppCore& core, std::function<void()> onQuit)
     : DocumentWindow ("SoundFunnel - " + TRANS ("Settings"),

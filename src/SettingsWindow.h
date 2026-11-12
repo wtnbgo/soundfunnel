@@ -16,4 +16,5 @@ public:
 
     /** True where the app lives in a system tray (Windows / macOS). */
     static bool hasTray();
+    static void setTrayAvailable (bool);   // call before creating the window
 };
