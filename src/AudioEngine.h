@@ -91,6 +91,8 @@ private:
     int32_t sourceSinkId = 0;
     std::atomic<bool> sendEnabled { true };
     bool sourcePlaying = false;
+    int stopBlocksLeft = 0;                             // audio thread only
+    static constexpr int kStopFlushBlocks = 16;
     std::atomic<juce::uint32> lastServerPingMs { 0 };
     juce::AudioBuffer<float> sendBuffer;
 

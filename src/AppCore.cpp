@@ -189,6 +189,7 @@ std::vector<AppCore::Member> AppCore::getMembers() const
     self.name = config.getNodeName();
     self.isSelf = true;
     self.isServer = claim.nodeId == self.id;
+    self.muted = mutedByServer;   // a client's own row shows the server's mute
     self.level = engine.getSendLevel();
     r.push_back (self);
 

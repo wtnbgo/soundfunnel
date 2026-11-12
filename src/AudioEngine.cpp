@@ -395,36 +395,54 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
         {
             source->set_option (want ? aoo_opt_start : aoo_opt_stop, nullptr, 0);
             sourcePlaying = want;
+            stopBlocksLeft = want ? 0 : kStopFlushBlocks;
         }
 
-        // map device inputs to the send channel count
-        float peak = 0.0f;
-        for (int c = 0; c < sendChannels; ++c)
+        // After aoo_opt_stop the AOO source fades out and pushes a little silence, but
+        // if process() keeps being fed it goes back to encoding the live input and never
+        // finishes flushing, so it keeps streaming. Feed silence for a few blocks to let
+        // the fade-out through, then stop calling process() so its queue drains.
+        if (! want)
         {
-            auto* dst = sendBuffer.getWritePointer (c);
-            if (testTone.load())
+            sendLevel = 0.0f;
+            if (stopBlocksLeft > 0)
             {
-                auto ph = tonePhase;
-                const auto inc = MathConstants<double>::twoPi * 440.0 / sampleRate;
-                for (int i = 0; i < numSamples; ++i, ph += inc) dst[i] = 0.1f * (float) std::sin (ph);
-                if (c == sendChannels - 1) tonePhase = std::fmod (ph, MathConstants<double>::twoPi);
+                --stopBlocksLeft;
+                sendBuffer.clear (0, numSamples);
+                source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
             }
-            else if (numIn == 0)
-                FloatVectorOperations::clear (dst, numSamples);
-            else if (sendChannels == 1 && numIn >= 2)
-            {
-                FloatVectorOperations::copyWithMultiply (dst, in[0], 0.5f, numSamples);
-                FloatVectorOperations::addWithMultiply (dst, in[1], 0.5f, numSamples);
-            }
-            else
-                FloatVectorOperations::copy (dst, in[jmin (c, numIn - 1)], numSamples);
-
-            auto r = FloatVectorOperations::findMinAndMax (dst, numSamples);
-            peak = jmax (peak, std::abs (r.getStart()), std::abs (r.getEnd()));
         }
-        sendLevel = want ? jmax (peak, sendLevel.load() * 0.9f) : 0.0f;
+        else
+        {
+            // map device inputs to the send channel count
+            float peak = 0.0f;
+            for (int c = 0; c < sendChannels; ++c)
+            {
+                auto* dst = sendBuffer.getWritePointer (c);
+                if (testTone.load())
+                {
+                    auto ph = tonePhase;
+                    const auto inc = MathConstants<double>::twoPi * 440.0 / sampleRate;
+                    for (int i = 0; i < numSamples; ++i, ph += inc) dst[i] = 0.1f * (float) std::sin (ph);
+                    if (c == sendChannels - 1) tonePhase = std::fmod (ph, MathConstants<double>::twoPi);
+                }
+                else if (numIn == 0)
+                    FloatVectorOperations::clear (dst, numSamples);
+                else if (sendChannels == 1 && numIn >= 2)
+                {
+                    FloatVectorOperations::copyWithMultiply (dst, in[0], 0.5f, numSamples);
+                    FloatVectorOperations::addWithMultiply (dst, in[1], 0.5f, numSamples);
+                }
+                else
+                    FloatVectorOperations::copy (dst, in[jmin (c, numIn - 1)], numSamples);
 
-        source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
+                auto r = FloatVectorOperations::findMinAndMax (dst, numSamples);
+                peak = jmax (peak, std::abs (r.getStart()), std::abs (r.getEnd()));
+            }
+            sendLevel = jmax (peak, sendLevel.load() * 0.9f);
+
+            source->process ((const aoo_sample**) sendBuffer.getArrayOfReadPointers(), numSamples, t);
+        }
     }
     else
     {
@@ -461,7 +479,8 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* in, int 
                 }
             }
             s->currentGain = target;
-            s->level = jmax (peak, s->level.load() * 0.9f);
+            const float lv = jmax (peak, s->level.load() * 0.9f);
+            s->level = lv < 1.0e-5f ? 0.0f : lv;   // don't decay into denormals
         }
 
         if (monitorLocal.load())
