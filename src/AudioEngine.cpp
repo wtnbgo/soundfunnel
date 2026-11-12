@@ -100,6 +100,12 @@ int AudioEngine::open (int port)
         return boundPort = -1;
     }
     boundPort = socket->getBoundPort();
+   #ifdef SO_NOSIGPIPE
+    {
+        int one = 1;
+        setsockopt (socket->getRawSocketHandle(), SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof (one));
+    }
+   #endif
 
     // bigger OS buffers help the server when many clients stream at once
     int sz = 1 << 20;

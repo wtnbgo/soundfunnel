@@ -9,7 +9,11 @@ AppConfig::AppConfig (const String& p) : profile (p)
     PropertiesFile::Options o;
     o.applicationName     = profile.isEmpty() ? "SoundFunnel" : "SoundFunnel-" + profile;
     o.filenameSuffix      = ".settings";
+   #if JUCE_LINUX || JUCE_BSD
+    o.folderName          = ".config/SoundFunnel";   // JUCE resolves this relative to $HOME on Linux
+   #else
     o.folderName          = "SoundFunnel";
+   #endif
     o.osxLibrarySubFolder = "Application Support";
     o.storageFormat       = PropertiesFile::storeAsXML;
     props = std::make_unique<PropertiesFile> (o);

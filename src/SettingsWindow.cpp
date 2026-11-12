@@ -105,8 +105,14 @@ namespace
     class StatusPage : public Component, private ChangeListener, private Timer
     {
     public:
-        explicit StatusPage (AppCore& c) : core (c)
+        StatusPage (AppCore& c, std::function<void()> onQuit) : core (c)
         {
+            if (onQuit != nullptr && ! SettingsWindow::hasTray())
+            {
+                quit.setButtonText (TRANS ("Quit"));
+                quit.onClick = std::move (onQuit);
+                addAndMakeVisible (quit);
+            }
             addAndMakeVisible (status);
             status.setFont (Font (17.0f, Font::bold));
             addAndMakeVisible (becomeServer);
@@ -136,6 +142,7 @@ namespace
             becomeServer.setBounds (row.removeFromLeft (220));
             row.removeFromLeft (12);
             pause.setBounds (row.removeFromLeft (200));
+            if (quit.isVisible()) quit.setBounds (row.removeFromRight (90));
             r.removeFromTop (10);
             membersLabel.setBounds (r.removeFromTop (22));
             viewport.setBounds (r);
@@ -172,7 +179,7 @@ namespace
 
         AppCore& core;
         Label status, membersLabel;
-        TextButton becomeServer;
+        TextButton becomeServer, quit;
         ToggleButton pause;
         Viewport viewport;
         Component list;
@@ -327,10 +334,10 @@ namespace
     //==========================================================================
     struct Content : public TabbedComponent
     {
-        explicit Content (AppCore& core) : TabbedComponent (TabbedButtonBar::TabsAtTop)
+        Content (AppCore& core, std::function<void()> onQuit) : TabbedComponent (TabbedButtonBar::TabsAtTop)
         {
             auto bg = findColour (ResizableWindow::backgroundColourId);
-            addTab (TRANS ("Status"), bg, new StatusPage (core), true);
+            addTab (TRANS ("Status"), bg, new StatusPage (core, std::move (onQuit)), true);
             addTab (TRANS ("Audio"), bg, new AudioPage (core), true);
             addTab (TRANS ("Send format"), bg, new FormatPage (core), true);
             addTab (TRANS ("Group"), bg, new GroupPage (core), true);
@@ -342,13 +349,22 @@ namespace
 }
 
 //==============================================================================
-SettingsWindow::SettingsWindow (AppCore& core)
+bool SettingsWindow::hasTray()
+{
+   #if JUCE_LINUX || JUCE_BSD
+    return false;
+   #else
+    return true;
+   #endif
+}
+
+SettingsWindow::SettingsWindow (AppCore& core, std::function<void()> onQuit)
     : DocumentWindow ("SoundFunnel - " + TRANS ("Settings"),
                       LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
                       DocumentWindow::closeButton | DocumentWindow::minimiseButton)
 {
     setUsingNativeTitleBar (true);
-    setContentOwned (new Content (core), true);
+    setContentOwned (new Content (core, std::move (onQuit)), true);
     setResizable (true, false);
     setResizeLimits (520, 380, 1600, 1200);
     centreWithSize (getWidth(), getHeight());
@@ -356,7 +372,10 @@ SettingsWindow::SettingsWindow (AppCore& core)
 
 void SettingsWindow::closeButtonPressed()
 {
-    setVisible (false);   // keep running in the tray
+    if (hasTray())
+        setVisible (false);   // keep running in the tray
+    else
+        setMinimised (true);  // no tray (Linux): stay reachable from the taskbar
 }
 
 void SettingsWindow::showAndFocus()

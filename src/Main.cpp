@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <juce_gui_extra/juce_gui_extra.h>
+#include <csignal>
 
 #include "AppCore.h"
 #include "Localisation.h"
@@ -39,6 +40,18 @@ public:
     {
         auto args = getCommandLineParameterArray();
 
+       #if JUCE_MAC || JUCE_LINUX || JUCE_BSD
+        // A write to a closed pipe/socket must report EPIPE, not kill a resident app.
+        std::signal (SIGPIPE, SIG_IGN);
+       #endif
+
+        // --log-file F : write startup steps and problems to F (diagnostics)
+        if (auto lf = argValue (args, "--log-file"); lf.isNotEmpty())
+        {
+            logger.reset (new FileLogger (File (lf), "SoundFunnel " + getApplicationVersion() + " " + args.joinIntoString (" ")));
+            Logger::setCurrentLogger (logger.get());
+        }
+
         if (args.contains ("--selftest"))
         {
             setApplicationReturnValue (runSelfTest());
@@ -48,27 +61,46 @@ public:
 
         Localisation::install();
 
+        Logger::writeToLog ("starting core");
         core = std::make_unique<AppCore> (argValue (args, "--profile"));
-        core->getEngine().setTestTone (args.contains ("--test-tone"));
-        if (args.contains ("--silent"))
+        Logger::writeToLog ("core started: " + core->getStatusText() + ", audio port " + String (core->getEngine().getPort()));
+
+        const bool testTone = args.contains ("--test-tone");
+        core->getEngine().setTestTone (testTone);
+        if (testTone || args.contains ("--silent"))
         {
-            // testing on one PC: never open an output device (avoids mic -> speaker feedback)
             auto& dm = core->getDeviceManager();
             auto setup = dm.getAudioDeviceSetup();
-            setup.outputDeviceName = {};
-            dm.setAudioDeviceSetup (setup, true);
+            // --silent: testing on one PC, never open an output device (avoids mic -> speaker feedback).
+            // --test-tone: the input's audio is not used, so skip it (no microphone permission prompt)
+            // unless it is the only device left: something has to drive the audio callback.
+            const bool silent = args.contains ("--silent");
+            if (silent) setup.outputDeviceName = {};
+            if (testTone && ! silent) setup.inputDeviceName = {};
+            auto err = dm.setAudioDeviceSetup (setup, true);
+            Logger::writeToLog ("test audio setup: in='" + setup.inputDeviceName + "' out='" + setup.outputDeviceName + "' " + err);
         }
-        settings = std::make_unique<SettingsWindow> (*core);
+        if (auto* dev = core->getDeviceManager().getCurrentAudioDevice())
+            Logger::writeToLog ("audio device: " + dev->getName() + " " + String (dev->getCurrentSampleRate()) + " Hz");
+        else
+            Logger::writeToLog ("audio device: none");
 
+        settings = std::make_unique<SettingsWindow> (*core, [this] { systemRequestedQuit(); });
+
+        const bool background = args.contains ("--background") && core->getConfig().getGroupKey().isNotEmpty();
+
+       #if JUCE_LINUX || JUCE_BSD
+        // No tray on Linux: JUCE's Linux tray icon uses XEmbed, and on GNOME (Wayland/Xwayland)
+        // embedding it crashed gnome-shell with BadWindow. Run as a normal window instead;
+        // "background" starts it minimised.
+        settings->showAndFocus();
+        if (background) settings->setMinimised (true);
+       #else
         tray = std::make_unique<TrayIcon> (*core,
                                            [this] { settings->showAndFocus(); },
                                            [this] { systemRequestedQuit(); });
-
-        bool showWindow = ! args.contains ("--background") || core->getConfig().getGroupKey().isEmpty();
-       #if JUCE_LINUX || JUCE_BSD
-        showWindow = showWindow || ! args.contains ("--background"); // tray support varies on Linux desktops
+        if (! background) settings->showAndFocus();
        #endif
-        if (showWindow) settings->showAndFocus();
 
         // diagnostics / automated testing:
         //   --status-file F   : write the current state as JSON every second
@@ -77,6 +109,8 @@ public:
         controlFile = argValue (args, "--control-file");
         if (statusFile.isNotEmpty() || controlFile.isNotEmpty())
             diag = std::make_unique<DiagTimer> (*this);
+
+        Logger::writeToLog ("initialised");
     }
 
     struct DiagTimer : public Timer
@@ -139,10 +173,13 @@ public:
 
     void shutdown() override
     {
+        Logger::writeToLog ("shutdown");
         diag.reset();
         tray.reset();
         settings.reset();
         core.reset();
+        Logger::setCurrentLogger (nullptr);
+        logger.reset();
     }
 
     void systemRequestedQuit() override { quit(); }
@@ -157,6 +194,7 @@ private:
     std::unique_ptr<SettingsWindow> settings;
     std::unique_ptr<TrayIcon> tray;
     std::unique_ptr<DiagTimer> diag;
+    std::unique_ptr<FileLogger> logger;
     String statusFile, controlFile;
 };
 

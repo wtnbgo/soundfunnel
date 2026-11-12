@@ -9,7 +9,11 @@
 class SettingsWindow : public juce::DocumentWindow
 {
 public:
-    explicit SettingsWindow (AppCore&);
+    /** onQuit is shown as a button where there is no tray menu to quit from (Linux). */
+    SettingsWindow (AppCore&, std::function<void()> onQuit);
     void closeButtonPressed() override;
     void showAndFocus();
+
+    /** True where the app lives in a system tray (Windows / macOS). */
+    static bool hasTray();
 };

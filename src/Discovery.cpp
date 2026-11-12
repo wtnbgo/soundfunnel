@@ -101,7 +101,13 @@ bool Discovery::start()
         socket.reset();
         return false;
     }
-    socket->setMulticastLoopbackEnabled (true); // lets several instances on one PC see each other
+    socket->setMulticastLoopbackEnabled (true);
+   #ifdef SO_NOSIGPIPE
+    {
+        int one = 1;
+        setsockopt (socket->getRawSocketHandle(), SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof (one));
+    }
+   #endif // lets several instances on one PC see each other
 
     refreshInterfaces();
     startThread();
