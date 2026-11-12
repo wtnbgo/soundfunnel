@@ -149,6 +149,12 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
   Windows は Inno Setup のインストーラと portable zip、macOS はユニバーサルの dmg、Linux は .deb と tar.gz。
   タグ `vX.Y.Z` を push すると下書きのリリースを作る（手順は [BUILDING.md](BUILDING.md)）。
 - アプリアイコンを追加した（`tools/make_icon.py` で生成）。
+- M5: Linux のシステムの音（PulseAudio / PipeWire の `@DEFAULT_MONITOR@`）を実装し、実機で取り込みと送信を確認した。
+  macOS は 14.2+ の Core Audio プロセスタップで実装した（実機確認はこれから）。
+- 不具合修正: サーバが新しいポートで再起動すると、クライアントの最初のフォーマット通知が捨てられ、
+  compact data には source id がないため二度と受信が始まらなかった。応答が来るまで 2 秒ごとに送り直す（Windows と Linux の実機で、サーバの再起動から自動で戻ることを確認）。
+- Windows の Release 版 exe に、ファイアウォールの「ブロック」ルールが付いていた（初回の確認ダイアログでブロックされたとみられる）。
+  インストーラでは許可ルールを追加できる。
 - ドキュメント: README（日本語 / 英語）、[BUILDING.md](BUILDING.md)、[TESTING.md](TESTING.md)、CHANGELOG を整備した。
 
 ### 既知の課題・TODO
