@@ -148,7 +148,7 @@ void LoopbackCapture::run()
                 }
 
                 // private aggregate device that reads the tap, clocked by the default output
-                NSMutableDictionary* agg = SF_AUTORELEASE ([@{
+                NSMutableDictionary* agg = [NSMutableDictionary dictionaryWithDictionary: @{
                     @kAudioAggregateDeviceNameKey:       @"SoundFunnel system audio",
                     @kAudioAggregateDeviceUIDKey:        [[NSUUID UUID] UUIDString],
                     @kAudioAggregateDeviceIsPrivateKey:  @YES,
@@ -156,7 +156,7 @@ void LoopbackCapture::run()
                     @kAudioAggregateDeviceTapAutoStartKey: @YES,
                     @kAudioAggregateDeviceTapListKey:    @[ @{ @kAudioSubTapUIDKey: (__bridge NSString*) tapUID,
                                                                @kAudioSubTapDriftCompensationKey: @YES } ],
-                } mutableCopy]);
+                }];
                 if (outUID.isNotEmpty())
                 {
                     NSString* o = [NSString stringWithUTF8String: outUID.toRawUTF8()];
@@ -177,7 +177,7 @@ void LoopbackCapture::run()
                 const double sr = fmt.mSampleRate;
                 const int chans = (int) fmt.mChannelsPerFrame;
                 const bool interleaved = (fmt.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0;
-                auto buf = std::make_shared<AudioBuffer<float>> (jmax (2, chans), 8192);
+                auto buf = std::make_shared<juce::AudioBuffer<float>> (jmax (2, chans), 8192);
                 auto cb = callback;
 
                 st = AudioDeviceCreateIOProcIDWithBlock (&procID, aggID, nullptr,
