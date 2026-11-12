@@ -1,0 +1,6 @@
+# shell scripts, CI and Linux desktop files must keep LF
+*.sh       text eol=lf
+*.yml      text eol=lf
+*.desktop  text eol=lf
+*.png      binary
+*.ico      binary

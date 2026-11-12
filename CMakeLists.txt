@@ -26,6 +26,10 @@ set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
 set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
 set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+if (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";")
+    # universal build: opus picks x86 / ARM intrinsics per configure, not per slice
+    set(OPUS_DISABLE_INTRINSICS ON CACHE BOOL "" FORCE)
+endif()
 FetchContent_Declare(opus
     GIT_REPOSITORY https://github.com/xiph/opus.git
     GIT_TAG        v1.5.2
@@ -75,6 +79,7 @@ juce_add_gui_app(SoundFunnel
     COMPANY_NAME "wtnbgo"
     BUNDLE_ID "io.github.wtnbgo.soundfunnel"
     VERSION ${PROJECT_VERSION}
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png"
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "SoundFunnel sends the selected audio input to the server PC on your LAN."
     PLIST_TO_MERGE "<plist><dict><key>LSUIElement</key><true/><key>NSLocalNetworkUsageDescription</key><string>SoundFunnel finds the other PCs of your group on the local network and sends audio to the server PC.</string></dict></plist>")
@@ -129,3 +134,32 @@ target_link_libraries(SoundFunnel PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+
+# ---------------------------------------------------------------- install / packages
+# Only the "app" component is packaged (opus would otherwise add its own install rules).
+if (APPLE)
+    install(TARGETS SoundFunnel BUNDLE DESTINATION . COMPONENT app)
+elseif (WIN32)
+    install(TARGETS SoundFunnel RUNTIME DESTINATION . COMPONENT app)
+    install(FILES LICENSE README.md DESTINATION . COMPONENT app)
+else()
+    include(GNUInstallDirs)
+    install(TARGETS SoundFunnel RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT app)
+    install(FILES packaging/linux/soundfunnel.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications COMPONENT app)
+    install(FILES resources/icon.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/1024x1024/apps
+            RENAME soundfunnel.png COMPONENT app)
+    install(FILES LICENSE README.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT app)
+endif()
+
+set(CPACK_PACKAGE_NAME "soundfunnel")
+set(CPACK_PACKAGE_VENDOR "SoundFunnel contributors")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Gather audio from several PCs on a LAN onto one server PC")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/wtnbgo/soundfunnel")
+set(CPACK_PACKAGE_CONTACT "https://github.com/wtnbgo/soundfunnel/issues")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};SoundFunnel;app;/")
+set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "")
+include(CPack)

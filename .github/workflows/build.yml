@@ -1,0 +1,121 @@
+# Builds SoundFunnel on Windows, macOS and Linux, runs the self test and
+# packages installers. A tag "vX.Y.Z" also creates a draft GitHub release.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows, os: windows-latest }
+          - { name: macos,   os: macos-14 }
+          - { name: linux,   os: ubuntu-24.04 }
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build xvfb \
+            libasound2-dev libjack-jackd2-dev libfreetype-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev \
+            libglu1-mesa-dev mesa-common-dev
+
+      - name: Version
+        shell: bash
+        run: |
+          v=$(sed -n 's/^project(SoundFunnel VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt | tr -d '\r')
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF#refs/tags/v}" != "$v" ]]; then
+            echo "::error::tag ${GITHUB_REF#refs/tags/} does not match the CMake project version $v"
+            exit 1
+          fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Configure
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   cmake -S . -B build "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" ;;
+            Linux)   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ;;
+            Windows) cmake -S . -B build ;;
+          esac
+
+      - name: Build
+        run: cmake --build build --config Release --target SoundFunnel --parallel
+
+      - name: Self test
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   build/SoundFunnel_artefacts/Release/SoundFunnel.app/Contents/MacOS/SoundFunnel --selftest ;;
+            Linux)   xvfb-run -a build/SoundFunnel_artefacts/Release/SoundFunnel --selftest ;;
+            Windows) build/SoundFunnel_artefacts/Release/SoundFunnel.exe --selftest ;;
+          esac
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=$env:VERSION" "/DSourceExe=..\..\build\SoundFunnel_artefacts\Release\SoundFunnel.exe" packaging\windows\SoundFunnel.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build\installer\*.exe dist\
+          $zip = "dist\SoundFunnel-$env:VERSION-windows-x64-portable.zip"
+          Compress-Archive -Path build\SoundFunnel_artefacts\Release\SoundFunnel.exe, LICENSE, README.md -DestinationPath $zip
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          sh packaging/macos/make_dmg.sh build/SoundFunnel_artefacts/Release/SoundFunnel.app "dist/SoundFunnel-$VERSION-macos-universal.dmg"
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          (cd build && cpack -G "DEB;TGZ")
+          mkdir -p dist
+          cp build/*.deb dist/
+          cp build/soundfunnel-*.tar.gz "dist/SoundFunnel-$VERSION-linux-x86_64.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoundFunnel-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/*
