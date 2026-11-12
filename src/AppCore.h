@@ -32,6 +32,7 @@ public:
     AppConfig& getConfig()                          { return config; }
     juce::AudioDeviceManager& getDeviceManager()    { return deviceManager; }
     AudioEngine& getEngine()                        { return engine; }
+    const Discovery& getDiscovery() const           { return discovery; }
 
     Role getRole() const                            { return role; }
     juce::String getServerName() const;

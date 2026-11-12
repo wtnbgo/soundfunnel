@@ -61,6 +61,9 @@ public:
 
     std::vector<Peer> getPeers() const; // live peers, excluding ourselves
 
+    struct Stats { juce::uint64 rawRx = 0, accepted = 0, rejected = 0, sent = 0, sendErrors = 0; int interfaces = 0; };
+    Stats getStats() const;
+
     // exposed for tests
     static juce::MemoryBlock encode (const LocalInfo&, const juce::String& session, juce::uint64 seq);
     struct Decoded { Peer peer; juce::String session; juce::uint64 seq = 0; };
@@ -75,8 +78,16 @@ private:
     void receiveOne();
     void prune();
 
+    struct NetInterface
+    {
+        juce::String address, broadcast;   // IPv4 dotted
+        bool operator== (const NetInterface& o) const { return address == o.address && broadcast == o.broadcast; }
+    };
+    /** Up, non-loopback, non-link-local IPv4 interfaces with their broadcast address. */
+    static std::vector<NetInterface> listInterfaces();
+
     std::unique_ptr<juce::DatagramSocket> socket;
-    juce::Array<juce::IPAddress> interfaces;
+    std::vector<NetInterface> interfaces;
     juce::uint32 lastInterfaceRefresh = 0;
 
     mutable juce::CriticalSection lock;
@@ -87,6 +98,8 @@ private:
     const juce::String session { juce::Uuid().toString() };
     juce::uint64 seq = 0;
     std::atomic<bool> sendNow { true };
+    std::atomic<juce::uint64> rawRx { 0 }, accepted { 0 }, rejected { 0 }, sent { 0 }, sendErrors { 0 };
+    std::atomic<int> numInterfaces { 0 };
 
     Listener* listener = nullptr;
 };

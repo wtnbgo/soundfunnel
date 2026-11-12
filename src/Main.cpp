@@ -169,6 +169,9 @@ public:
             o->setProperty ("server", core->getServerName());
             o->setProperty ("audioPort", core->getEngine().getPort());
             auto k = core->getEngine().getCounters();
+            auto ds = core->getDiscovery().getStats();
+            o->setProperty ("discovery", String::formatted ("raw=%llu ok=%llu bad=%llu sent=%llu senderr=%llu if=%d",
+                                                            ds.rawRx, ds.accepted, ds.rejected, ds.sent, ds.sendErrors, ds.interfaces));
             o->setProperty ("net", String::formatted ("rx=%llu routed=%llu dropped=%llu tx=%llu cb=%llu",
                                                       k.rx, k.rxRouted, k.rxDropped, k.tx, k.callbacks));
             if (auto* dev = core->getDeviceManager().getCurrentAudioDevice())

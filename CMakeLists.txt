@@ -105,6 +105,14 @@ target_compile_definitions(SoundFunnel PRIVATE
     JUCE_ALSA=1
     JUCE_JACK=1)
 
+if (APPLE)
+    # ad-hoc sign the bundle so the macOS application firewall can attach an
+    # "allow incoming connections" rule to it (it ignores unsigned apps)
+    add_custom_command(TARGET SoundFunnel POST_BUILD
+        COMMAND codesign --force --deep --sign - "$<TARGET_BUNDLE_DIR:SoundFunnel>"
+        VERBATIM)
+endif()
+
 target_link_libraries(SoundFunnel PRIVATE
     aoo
     juce::juce_audio_devices

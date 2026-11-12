@@ -3,10 +3,14 @@
  #define NOMINMAX
  #include <winsock2.h>
  #include <ws2tcpip.h>
+ #include <iphlpapi.h>
+ #pragma comment (lib, "iphlpapi.lib")
 #else
  #include <sys/socket.h>
  #include <netinet/in.h>
  #include <arpa/inet.h>
+ #include <ifaddrs.h>
+ #include <net/if.h>
 #endif
 
 #include "Discovery.h"
@@ -142,6 +146,11 @@ void Discovery::setLocalInfo (const LocalInfo& info)
 
 void Discovery::sendBeaconSoon() { sendNow = true; }
 
+Discovery::Stats Discovery::getStats() const
+{
+    return { rawRx.load(), accepted.load(), rejected.load(), sent.load(), sendErrors.load(), numInterfaces.load() };
+}
+
 std::vector<Discovery::Peer> Discovery::getPeers() const
 {
     const ScopedLock sl (lock);
@@ -219,16 +228,80 @@ bool Discovery::decode (const void* data, size_t size, const String& key, Decode
 }
 
 //==============================================================================
+// JUCE's IPAddress::findAllAddresses() returns multicast group and link-local
+// addresses on Windows, and getInterfaceBroadcastAddress() returns 0.0.0.0 there,
+// so enumerate interfaces with the OS API instead.
+std::vector<Discovery::NetInterface> Discovery::listInterfaces()
+{
+    std::vector<NetInterface> result;
+
+    auto add = [&result] (uint32 addrHost, uint32 maskHost)
+    {
+        if ((addrHost >> 24) == 127) return;                  // loopback
+        if ((addrHost >> 16) == 0xa9fe) return;               // 169.254/16 link-local
+        if ((addrHost >> 28) == 0xe || addrHost == 0) return; // multicast / any
+        in_addr a {}, b {};
+        a.s_addr = htonl (addrHost);
+        b.s_addr = htonl (maskHost != 0 && maskHost != 0xffffffffu ? (addrHost | ~maskHost) : 0);
+        char sa[INET_ADDRSTRLEN] {}, sb[INET_ADDRSTRLEN] {};
+        inet_ntop (AF_INET, &a, sa, sizeof (sa));
+        inet_ntop (AF_INET, &b, sb, sizeof (sb));
+        NetInterface ni { sa, b.s_addr != 0 ? String (sb) : String() };
+        if (std::find (result.begin(), result.end(), ni) == result.end())
+            result.push_back (ni);
+    };
+
+   #if defined (_WIN32)
+    ULONG size = 16 * 1024;
+    HeapBlock<char> buf;
+    for (int attempt = 0; attempt < 3; ++attempt)
+    {
+        buf.calloc (size);
+        auto r = GetAdaptersAddresses (AF_INET, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                                       nullptr, (IP_ADAPTER_ADDRESSES*) buf.get(), &size);
+        if (r == ERROR_BUFFER_OVERFLOW) continue;
+        if (r != NO_ERROR) return result;
+        break;
+    }
+    for (auto* ad = (IP_ADAPTER_ADDRESSES*) buf.get(); ad != nullptr; ad = ad->Next)
+    {
+        if (ad->OperStatus != IfOperStatusUp || ad->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+        for (auto* u = ad->FirstUnicastAddress; u != nullptr; u = u->Next)
+        {
+            if (u->Address.lpSockaddr->sa_family != AF_INET) continue;
+            auto addr = ntohl (((sockaddr_in*) u->Address.lpSockaddr)->sin_addr.s_addr);
+            auto prefix = (int) u->OnLinkPrefixLength;
+            uint32 mask = prefix <= 0 ? 0 : (prefix >= 32 ? 0xffffffffu : ~((1u << (32 - prefix)) - 1));
+            add (addr, mask);
+        }
+    }
+   #else
+    ifaddrs* list = nullptr;
+    if (getifaddrs (&list) != 0) return result;
+    for (auto* i = list; i != nullptr; i = i->ifa_next)
+    {
+        if (i->ifa_addr == nullptr || i->ifa_addr->sa_family != AF_INET) continue;
+        if ((i->ifa_flags & IFF_UP) == 0 || (i->ifa_flags & IFF_LOOPBACK) != 0) continue;
+        auto addr = ntohl (((sockaddr_in*) i->ifa_addr)->sin_addr.s_addr);
+        auto mask = i->ifa_netmask != nullptr ? ntohl (((sockaddr_in*) i->ifa_netmask)->sin_addr.s_addr) : 0u;
+        add (addr, mask);
+    }
+    freeifaddrs (list);
+   #endif
+
+    return result;
+}
+
 void Discovery::refreshInterfaces()
 {
     lastInterfaceRefresh = Time::getMillisecondCounter();
 
-    Array<IPAddress> addrs;
-    IPAddress::findAllAddresses (addrs, false);
-    addrs.removeIf ([] (const IPAddress& a) { return a.isNull(); });
-
-    if (addrs == interfaces) return;
-    interfaces = addrs;
+    auto list = listInterfaces();
+    if (list == interfaces) return;
+    interfaces = list;
+    numInterfaces = (int) interfaces.size();
+    for (auto& a : interfaces)
+        Logger::writeToLog ("discovery interface " + a.address + " broadcast " + (a.broadcast.isEmpty() ? String ("-") : a.broadcast));
 
     // join the multicast group on every interface (JUCE's joinMulticast only uses the default one)
     auto fd = socket->getRawSocketHandle();
@@ -236,7 +309,7 @@ void Discovery::refreshInterfaces()
     {
         ip_mreq mreq {};
         inet_pton (AF_INET, kMulticastGroup, &mreq.imr_multiaddr);
-        inet_pton (AF_INET, a.toString().toRawUTF8(), &mreq.imr_interface);
+        inet_pton (AF_INET, a.address.toRawUTF8(), &mreq.imr_interface);
         setsockopt ((decltype (socket->getRawSocketHandle())) fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
                     (const char*) &mreq, sizeof (mreq)); // fails harmlessly if already joined
     }
@@ -258,14 +331,13 @@ void Discovery::sendBeacon()
     {
         // multicast out of this interface
         in_addr ifaddr {};
-        inet_pton (AF_INET, a.toString().toRawUTF8(), &ifaddr);
+        inet_pton (AF_INET, a.address.toRawUTF8(), &ifaddr);
         setsockopt ((decltype (fd)) fd, IPPROTO_IP, IP_MULTICAST_IF, (const char*) &ifaddr, sizeof (ifaddr));
-        socket->write (kMulticastGroup, kPort, pkt.getData(), (int) pkt.getSize());
+        (socket->write (kMulticastGroup, kPort, pkt.getData(), (int) pkt.getSize()) > 0 ? sent : sendErrors)++;
 
         // directed broadcast as a fallback for networks that drop multicast
-        auto bc = IPAddress::getInterfaceBroadcastAddress (a);
-        if (! bc.isNull() && a != IPAddress::local())
-            socket->write (bc.toString(), kPort, pkt.getData(), (int) pkt.getSize());
+        if (a.broadcast.isNotEmpty())
+            (socket->write (a.broadcast, kPort, pkt.getData(), (int) pkt.getSize()) > 0 ? sent : sendErrors)++;
     }
 }
 
@@ -276,6 +348,7 @@ void Discovery::receiveOne()
     int senderPort = 0;
     auto n = socket->read (buf, sizeof (buf), false, senderIP, senderPort);
     if (n <= 0) return;
+    ++rawRx;
 
     String key, self;
     {
@@ -286,7 +359,9 @@ void Discovery::receiveOne()
     if (key.isEmpty()) return;
 
     Decoded d;
-    if (! decode (buf, (size_t) n, key, d) || d.peer.id == self) return;
+    if (! decode (buf, (size_t) n, key, d)) { ++rejected; return; }
+    if (d.peer.id == self) return;
+    ++accepted;
 
     bool changed = false;
     {
