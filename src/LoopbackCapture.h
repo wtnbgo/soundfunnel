@@ -7,8 +7,8 @@
 /** Captures what this PC plays ("system audio") from an output device.
 
     Windows: WASAPI loopback on a render endpoint (shared mode).
-    Linux:   the monitor source of the default output via PulseAudio / PipeWire
-             (libpulse-simple, loaded at run time).
+    Linux:   the monitor source of an output (sink) via PulseAudio / PipeWire
+             (libpulse / libpulse-simple, loaded at run time).
     macOS:   a Core Audio process tap on all processes (macOS 14.2+), in LoopbackCapture_mac.mm.
 
     Audio is delivered on an internal thread in the device's mix format,

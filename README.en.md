@@ -53,7 +53,7 @@ Allow the permission prompts:
 4. On each client choose what to send (Sending tab): **Audio input**, or **System audio**
    (Windows: pick the output device to capture, default follows the system default;
    macOS 14.2+: every app's output mixed together;
-   Linux: the default output's monitor via PulseAudio / PipeWire).
+   Linux: pick an output; its PulseAudio / PipeWire monitor is captured).
    For audio input, choose the input device on the Audio tab.
 5. On the server's Status tab, each client shows whether audio arrives and its level, with mute
    and volume controls. A muted client stops sending.

@@ -387,10 +387,116 @@ namespace
         static PulseSimple p;
         return p;
     }
+
+    //--------------------------------------------------------------------------
+    // Listing the outputs (sinks) needs the asynchronous libpulse API; it is driven
+    // synchronously here with a private main loop. Struct layout from <pulse/introspect.h>
+    // (stable ABI; only the leading fields are used).
+    struct pa_channel_map_ { uint8_t channels; int map[32]; };
+    struct pa_cvolume_     { uint8_t channels; uint32_t values[32]; };
+    struct pa_sink_info_
+    {
+        const char* name;
+        uint32_t index;
+        const char* description;
+        pa_sample_spec_ sample_spec;
+        pa_channel_map_ channel_map;
+        uint32_t owner_module;
+        pa_cvolume_ volume;
+        int mute;
+        uint32_t monitor_source;
+        const char* monitor_source_name;
+    };
+
+    struct PulseApi
+    {
+        void* (*mainloop_new)() = nullptr;
+        void* (*mainloop_get_api) (void*) = nullptr;
+        int   (*mainloop_iterate) (void*, int, int*) = nullptr;
+        void  (*mainloop_free) (void*) = nullptr;
+        void* (*context_new) (void*, const char*) = nullptr;
+        int   (*context_connect) (void*, const char*, int, const void*) = nullptr;
+        int   (*context_get_state) (void*) = nullptr;
+        void  (*context_disconnect) (void*) = nullptr;
+        void  (*context_unref) (void*) = nullptr;
+        void* (*context_get_sink_info_list) (void*, void (*) (void*, const pa_sink_info_*, int, void*), void*) = nullptr;
+        int   (*operation_get_state) (void*) = nullptr;
+        void  (*operation_unref) (void*) = nullptr;
+        bool ok = false;
+
+        PulseApi()
+        {
+            void* lib = dlopen ("libpulse.so.0", RTLD_NOW | RTLD_LOCAL);
+            if (lib == nullptr) return;
+            auto get = [lib] (auto& fn, const char* sym) { fn = reinterpret_cast<std::remove_reference_t<decltype (fn)>> (dlsym (lib, sym)); return fn != nullptr; };
+            ok = get (mainloop_new, "pa_mainloop_new") && get (mainloop_get_api, "pa_mainloop_get_api")
+              && get (mainloop_iterate, "pa_mainloop_iterate") && get (mainloop_free, "pa_mainloop_free")
+              && get (context_new, "pa_context_new") && get (context_connect, "pa_context_connect")
+              && get (context_get_state, "pa_context_get_state") && get (context_disconnect, "pa_context_disconnect")
+              && get (context_unref, "pa_context_unref") && get (context_get_sink_info_list, "pa_context_get_sink_info_list")
+              && get (operation_get_state, "pa_operation_get_state") && get (operation_unref, "pa_operation_unref");
+        }
+
+        static PulseApi& get() { static PulseApi a; return a; }
+    };
+
+    struct Sink { String description, monitor; };
+
+    /** The outputs with their monitor source names; empty if the server can't be reached. */
+    std::vector<Sink> listSinks()
+    {
+        std::vector<Sink> sinks;
+        auto& pa = PulseApi::get();
+        if (! pa.ok) return sinks;
+
+        constexpr int kReady = 4, kFailed = 5, kTerminated = 6, kOpRunning = 0;
+        void* ml = pa.mainloop_new();
+        if (ml == nullptr) return sinks;
+        void* ctx = pa.context_new (pa.mainloop_get_api (ml), "SoundFunnel");
+
+        // poll without blocking so a stuck sound server can't hang the caller (2 s budget)
+        const auto deadline = Time::getMillisecondCounter() + 2000;
+        auto pump = [&] { pa.mainloop_iterate (ml, 0, nullptr); Thread::sleep (2); return Time::getMillisecondCounter() < deadline; };
+
+        if (ctx != nullptr && pa.context_connect (ctx, nullptr, 0, nullptr) >= 0)
+        {
+            int st = 0;
+            while ((st = pa.context_get_state (ctx)) != kReady && st != kFailed && st != kTerminated && pump()) {}
+
+            if (st == kReady)
+            {
+                auto cb = [] (void*, const pa_sink_info_* i, int eol, void* user)
+                {
+                    if (eol != 0 || i == nullptr) return;
+                    auto* out = static_cast<std::vector<Sink>*> (user);
+                    String desc = String::fromUTF8 (i->description != nullptr ? i->description : i->name);
+                    String mon  = String::fromUTF8 (i->monitor_source_name != nullptr ? i->monitor_source_name : "");
+                    if (mon.isEmpty() && i->name != nullptr) mon = String::fromUTF8 (i->name) + ".monitor";
+                    out->push_back ({ desc, mon });
+                };
+                if (void* op = pa.context_get_sink_info_list (ctx, cb, &sinks))
+                {
+                    while (pa.operation_get_state (op) == kOpRunning && pump()) {}
+                    pa.operation_unref (op);
+                }
+            }
+            pa.context_disconnect (ctx);
+        }
+        if (ctx != nullptr) pa.context_unref (ctx);
+        pa.mainloop_free (ml);
+        return sinks;
+    }
 }
 
 bool LoopbackCapture::isSupported()            { return pulse().ok(); }
-StringArray LoopbackCapture::getDeviceNames()  { return {}; }   // only "the default output" for now
+
+StringArray LoopbackCapture::getDeviceNames()
+{
+    StringArray names;
+    for (auto& s : listSinks())
+        names.addIfNotAlreadyThere (s.description);
+    return names;
+}
 
 void LoopbackCapture::run()
 {
@@ -404,11 +510,24 @@ void LoopbackCapture::run()
     constexpr double sr = 48000.0;
     constexpr int chans = 2;
     constexpr int frames = 480;                     // 10 ms per read
-    // a device name is a PulseAudio source; the default output's monitor otherwise
-    const String source = requestedDevice.isEmpty() ? String ("@DEFAULT_MONITOR@") : requestedDevice;
-
     while (! threadShouldExit())
     {
+        // the chosen output (by its description, as shown in the UI) -> its monitor source;
+        // nothing chosen = the default output's monitor
+        String source ("@DEFAULT_MONITOR@");
+        if (requestedDevice.isNotEmpty())
+        {
+            source.clear();
+            for (auto& s : listSinks())
+                if (s.description == requestedDevice) { source = s.monitor; break; }
+            if (source.isEmpty())
+            {
+                setError ("output device not found: " + requestedDevice);
+                wait (2000);
+                continue;
+            }
+        }
+
         pa_sample_spec_ spec { PA_SAMPLE_FLOAT32LE_, (uint32_t) sr, (uint8_t) chans };
         pa_buffer_attr_ attr { (uint32_t) -1, (uint32_t) -1, (uint32_t) -1, (uint32_t) -1,
                                (uint32_t) (frames * chans * sizeof (float)) };
@@ -425,7 +544,7 @@ void LoopbackCapture::run()
         setError ({});
         {
             const ScopedLock sl (infoLock);
-            description = source + " 48000 Hz 2 ch";
+            description = (requestedDevice.isNotEmpty() ? requestedDevice : String ("Default output")) + " (" + source + ") 48000 Hz 2 ch";
         }
         Logger::writeToLog ("loopback: capturing " + source);
 
