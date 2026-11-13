@@ -18,9 +18,11 @@ private:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void showMenu();
+    juce::PopupMenu buildMenu();
     void refresh();
 
     AppCore& core;
     std::function<void()> openSettings, quit;
     AppCore::Role shownRole { (AppCore::Role) -1 };
+    juce::String menuSignature;   // macOS: rebuild the attached menu only when this changes
 };

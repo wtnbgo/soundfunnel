@@ -100,7 +100,7 @@ target_sources(SoundFunnel PRIVATE
     src/DefaultDevices.cpp)
 
 if (APPLE)
-    target_sources(SoundFunnel PRIVATE src/MicPermission_mac.mm src/LoopbackCapture_mac.mm)
+    target_sources(SoundFunnel PRIVATE src/MicPermission_mac.mm src/LoopbackCapture_mac.mm src/TrayIcon_mac.mm)
 else()
     target_sources(SoundFunnel PRIVATE src/LoopbackCapture.cpp)
 endif()

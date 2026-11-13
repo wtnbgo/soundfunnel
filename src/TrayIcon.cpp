@@ -3,6 +3,10 @@
 
 using namespace juce;
 
+#if JUCE_MAC
+void setMacStatusItemMenu (void* nativeStatusItem, const PopupMenu&);   // TrayIcon_mac.mm
+#endif
+
 TrayIcon::TrayIcon (AppCore& c, std::function<void()> o, std::function<void()> q)
     : core (c), openSettings (std::move (o)), quit (std::move (q))
 {
@@ -54,6 +58,18 @@ void TrayIcon::refresh()
         setIconImage (img, img);
     }
     setIconTooltip ("SoundFunnel - " + core.getStatusText());
+
+   #if JUCE_MAC
+    // the menu lives on the status item (see TrayIcon_mac.mm); rebuilding it while it is
+    // open would close it, so only do so when its contents change
+    const auto role = core.getRole();
+    const String sig = core.getStatusText() + "|" + String ((int) role) + "|" + String ((int) core.isPaused());
+    if (sig != menuSignature)
+    {
+        menuSignature = sig;
+        setMacStatusItemMenu (getNativeHandle(), buildMenu());
+    }
+   #endif
 }
 
 void TrayIcon::changeListenerCallback (ChangeBroadcaster*) { refresh(); }
@@ -77,7 +93,7 @@ void TrayIcon::mouseDoubleClick (const MouseEvent&)
     if (openSettings) openSettings();
 }
 
-void TrayIcon::showMenu()
+PopupMenu TrayIcon::buildMenu()
 {
     PopupMenu m;
     m.addSectionHeader (core.getStatusText());
@@ -88,10 +104,15 @@ void TrayIcon::showMenu()
     m.addSeparator();
     m.addItem (TRANS ("Open settings..."), [this] { if (openSettings) openSettings(); });
     m.addItem (TRANS ("Quit"), [this] { if (quit) quit(); });
+    return m;
+}
 
+void TrayIcon::showMenu()
+{
    #if JUCE_MAC
-    showDropdownMenu (m);
+    refresh();   // macOS opens the attached menu itself
    #else
+    auto m = buildMenu();
     // a hidden window must be in front for the menu to dismiss correctly on Windows
     Process::makeForegroundProcess();
     m.showMenuAsync (PopupMenu::Options().withMousePosition());
