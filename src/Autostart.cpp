@@ -53,7 +53,7 @@ bool Autostart::setEnabled (bool on)
           << "<key>RunAtLoad</key><true/>\n"
           << "</dict></plist>\n";
     plistFile().getParentDirectory().createDirectory();
-    return plistFile().replaceWithText (plist);
+    return plistFile().replaceWithText (plist, false, false, "\n");
    #else
     if (! on) return desktopFile().deleteFile();
     String d;
@@ -62,7 +62,7 @@ bool Autostart::setEnabled (bool on)
       << "StartupWMClass=SoundFunnel\n"
       << "X-GNOME-Autostart-enabled=true\n";
     desktopFile().getParentDirectory().createDirectory();
-    return desktopFile().replaceWithText (d);
+    return desktopFile().replaceWithText (d, false, false, "\n");
    #endif
 }
 
@@ -93,13 +93,13 @@ void Autostart::ensureDesktopEntry()
       << "Exec=\"" << executable().getFullPathName() << "\"\n"
       << "Icon=" << icon.getFullPathName() << "\n"
       << "StartupWMClass=SoundFunnel\n"
-      << "Categories=AudioVideo;Audio;Network;\nTerminal=false\n";
+      << "Categories=AudioVideo;Audio;\nTerminal=false\n";
 
     // rewrite only when something changed (e.g. the app was moved)
     if (desktop.loadFileAsString() != d)
     {
         desktop.getParentDirectory().createDirectory();
-        desktop.replaceWithText (d);
+        desktop.replaceWithText (d, false, false, "\n");
     }
    #endif
 }

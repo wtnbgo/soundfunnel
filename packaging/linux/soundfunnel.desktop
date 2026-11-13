@@ -5,6 +5,6 @@ Comment=Gather audio from several PCs on a LAN onto one server PC
 Comment[ja]=LAN 内の複数 PC の音を 1 台のサーバ PC に集める
 Exec=SoundFunnel
 Icon=soundfunnel
-Categories=AudioVideo;Audio;Network;
+Categories=AudioVideo;Audio;
 Terminal=false
 StartupWMClass=SoundFunnel

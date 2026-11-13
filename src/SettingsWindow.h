@@ -12,9 +12,14 @@ public:
     /** onQuit is shown as a button where there is no tray menu to quit from (Linux). */
     SettingsWindow (AppCore&, std::function<void()> onQuit);
     void closeButtonPressed() override;
+    void visibilityChanged() override;
     void showAndFocus();
 
     /** True where the app lives in a system tray (Windows / macOS). */
     static bool hasTray();
     static void setTrayAvailable (bool);   // call before creating the window
+
+private:
+    void applyWindowIcon();
+    juce::ComponentPeer* iconPeer = nullptr;
 };
