@@ -73,8 +73,9 @@ Before macOS 14.2, system audio can be sent through a virtual device
 | Discovery (multicast 239.255.77.77 and broadcast) | UDP 47700 |
 | Audio | UDP 47701 (or any free port) |
 
-Discovery packets are authenticated with the group key (HMAC-SHA256); the audio itself is not
-encrypted. Use it on a trusted LAN.
+Discovery packets are authenticated with the group key (HMAC-SHA256); the audio itself is neither
+encrypted nor authenticated. Use it on a trusted LAN, and use a long key made with **Generate**
+on the Group tab: short keys can be guessed by anyone on the LAN who records a beacon.
 
 ### Command line
 
