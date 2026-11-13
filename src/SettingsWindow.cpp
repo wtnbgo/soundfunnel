@@ -2,6 +2,7 @@
 #include "SettingsWindow.h"
 #include "Autostart.h"
 #include "Codecs.h"
+#include "BinaryData.h"
 #include "LoopbackCapture.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -441,6 +442,10 @@ SettingsWindow::SettingsWindow (AppCore& core, std::function<void()> onQuit)
                       DocumentWindow::closeButton | DocumentWindow::minimiseButton)
 {
     setUsingNativeTitleBar (true);
+   #if JUCE_LINUX || JUCE_BSD
+    // window icon (_NET_WM_ICON): the dock falls back to it when no .desktop file matches
+    setIcon (ImageCache::getFromMemory (BinaryData::icon_png, BinaryData::icon_pngSize).rescaled (128, 128, Graphics::highResamplingQuality));
+   #endif
     setContentOwned (new Content (core, std::move (onQuit)), true);
     setResizable (true, false);
     setResizeLimits (520, 380, 1600, 1200);

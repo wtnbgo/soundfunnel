@@ -6,6 +6,7 @@
 #include <csignal>
 
 #include "AppCore.h"
+#include "Autostart.h"
 #include "Localisation.h"
 #include "SettingsWindow.h"
 #include "TrayIcon.h"
@@ -85,6 +86,7 @@ public:
         }
 
         Localisation::install();
+        Autostart::ensureDesktopEntry();   // Linux: dock / app list icon when not installed from a package
 
         // --silent: testing on one PC, never open an output device (avoids mic -> speaker feedback).
         // --test-tone: the input's audio is not used, so don't open it (no microphone permission

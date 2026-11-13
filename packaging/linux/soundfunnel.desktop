@@ -7,3 +7,4 @@ Exec=SoundFunnel
 Icon=soundfunnel
 Categories=AudioVideo;Audio;Network;
 Terminal=false
+StartupWMClass=SoundFunnel

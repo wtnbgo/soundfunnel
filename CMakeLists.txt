@@ -136,7 +136,10 @@ if (UNIX AND NOT APPLE)
     target_link_libraries(SoundFunnel PRIVATE ${CMAKE_DL_LIBS})   # libpulse-simple is dlopen'ed
 endif()
 
+juce_add_binary_data(SoundFunnelData SOURCES resources/icon.png)
+
 target_link_libraries(SoundFunnel PRIVATE
+    SoundFunnelData
     aoo
     juce::juce_audio_devices
     juce::juce_audio_utils
