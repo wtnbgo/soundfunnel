@@ -58,7 +58,7 @@ public:
         // --log-file F : write startup steps and problems to F (diagnostics)
         if (auto lf = argValue (args, "--log-file"); lf.isNotEmpty())
         {
-            logger.reset (new FileLogger (File (lf), "SoundFunnel " + getApplicationVersion() + " " + args.joinIntoString (" ")));
+            logger.reset (new TimestampedLogger (File (lf), "SoundFunnel " + getApplicationVersion() + " " + args.joinIntoString (" ")));
             Logger::setCurrentLogger (logger.get());
         }
 
@@ -101,6 +101,7 @@ public:
        #endif
 
         settings = std::make_unique<SettingsWindow> (*core, [this] { systemRequestedQuit(); });
+        Logger::writeToLog ("settings window created");
 
         const bool background = args.contains ("--background") && core->getConfig().getGroupKey().isNotEmpty();
 
@@ -243,6 +244,15 @@ private:
     std::unique_ptr<LinuxTray> linuxTray;
    #endif
     std::unique_ptr<DiagTimer> diag;
+    /** FileLogger with a time stamp on every line (helps to see where startup waits). */
+    struct TimestampedLogger : public FileLogger
+    {
+        using FileLogger::FileLogger;
+        void logMessage (const String& m) override
+        {
+            FileLogger::logMessage (Time::getCurrentTime().formatted ("%H:%M:%S.") + String (Time::getCurrentTime().getMilliseconds()).paddedLeft ('0', 3) + " " + m);
+        }
+    };
     std::unique_ptr<FileLogger> logger;
     std::unique_ptr<SignalWatcher> signalWatcher;
     String statusFile, controlFile;
