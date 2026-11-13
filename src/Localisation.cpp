@@ -84,6 +84,60 @@ countries: jp
                 return c;
         return {};
     }
+
+   #if JUCE_LINUX || JUCE_BSD
+    /** JUCE 7 only scans .ttf/.otf/.pfb/.pcf files on Linux, but distributions ship the
+        Japanese fonts (Noto Sans CJK) as .ttc collections, so they are never found and
+        Japanese text shows as boxes. Find a CJK font file ourselves (fontconfig first,
+        then the usual locations) and load it from memory. Face 0 of the Noto CJK
+        collections is the Japanese one. */
+    Typeface::Ptr loadLinuxCjkTypeface()
+    {
+        StringArray files;
+
+        ChildProcess fc;
+        if (fc.start (StringArray { "fc-match", "-f", "%{file}", "sans-serif:lang=ja" }, ChildProcess::wantStdOut))
+        {
+            auto f = fc.readAllProcessOutput().trim();
+            fc.waitForProcessToFinish (2000);
+            if (f.isNotEmpty()) files.add (f);
+        }
+
+        for (auto* p : { "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",          // Debian / Ubuntu
+                         "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",               // Arch / Fedora
+                         "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",        // Fedora
+                         "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
+                         "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",              // Debian alternative
+                         "/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf",
+                         "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
+                         "/usr/share/fonts/truetype/vlgothic/VL-PGothic-Regular.ttf" })
+            files.addIfNotAlreadyThere (p);
+
+        for (auto& path : files)
+        {
+            File f (path);
+            if (! f.existsAsFile() || f.getSize() > 64 * 1024 * 1024) continue;
+
+            MemoryBlock data;
+            if (! f.loadFileAsData (data)) continue;
+
+            if (auto tf = Typeface::createSystemTypefaceFor (data.getData(), data.getSize()))
+            {
+                // must actually have Japanese glyphs (U+3042 HIRAGANA LETTER A)
+                Array<int> glyphs;
+                Array<float> offsets;
+                tf->getGlyphPositions (String::charToString ((juce_wchar) 0x3042), glyphs, offsets);
+                if (glyphs.size() == 1 && glyphs[0] > 0)
+                {
+                    Logger::writeToLog ("font: " + tf->getName() + " (" + path + ")");
+                    return tf;
+                }
+            }
+        }
+        Logger::writeToLog ("font: no Japanese font found (install fonts-noto-cjk)");
+        return nullptr;
+    }
+   #endif
 }
 
 void Localisation::install()
@@ -93,6 +147,16 @@ void Localisation::install()
     {
         LocalisedStrings::setCurrentMappings (new LocalisedStrings (String::fromUTF8 (kJapanese), false));
         if (auto f = pickCjkFont(); f.isNotEmpty())
+        {
             LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypefaceName (f);
+            return;
+        }
     }
+
+   #if JUCE_LINUX || JUCE_BSD
+    // JUCE draws all text itself on Linux and has no font fallback, so Japanese text
+    // (UI translation, or PC names typed in Japanese) needs a CJK font in any language
+    if (auto tf = loadLinuxCjkTypeface())
+        LookAndFeel::getDefaultLookAndFeel().setDefaultSansSerifTypeface (tf);
+   #endif
 }
