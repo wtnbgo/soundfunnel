@@ -96,16 +96,27 @@ bool Autostart::setEnabled (bool on)
 void Autostart::ensureDesktopEntry()
 {
    #if JUCE_LINUX || JUCE_BSD
-    // installed from the .deb: /usr/share/applications/soundfunnel.desktop already matches
-    for (auto* sys : { "/usr/share/applications/soundfunnel.desktop", "/usr/local/share/applications/soundfunnel.desktop" })
-        if (File (sys).existsAsFile() && executable().getFullPathName().startsWith ("/usr"))
-            return;
-
-    if (! safeForDesktopEntry (executable().getFullPathName())) return;
-
     const auto home = File::getSpecialLocation (File::userHomeDirectory);
     auto icon = home.getChildFile (".local/share/icons/hicolor/256x256/apps/soundfunnel.png");
     auto desktop = home.getChildFile (".local/share/applications/soundfunnel.desktop");
+
+    // Installed from the .deb: the system entry is the one to use. A user entry written by an
+    // earlier unpackaged run would shadow it (and launch that old build), so remove ours.
+    for (auto* sys : { "/usr/share/applications/soundfunnel.desktop", "/usr/local/share/applications/soundfunnel.desktop" })
+    {
+        if (File (sys).existsAsFile())
+        {
+            const auto text = desktop.loadFileAsString();
+            if (text.contains ("StartupWMClass=SoundFunnel") && text.contains ("Name=SoundFunnel"))
+            {
+                desktop.deleteFile();
+                icon.deleteFile();
+            }
+            return;
+        }
+    }
+
+    if (! safeForDesktopEntry (executable().getFullPathName())) return;
 
     if (! icon.existsAsFile())
     {
