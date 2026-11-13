@@ -162,6 +162,9 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
 - Linux: Dock のアイコンが歯車になっていた。ウィンドウにアイコン（_NET_WM_ICON）を設定し、パッケージで
   入れていない場合は ~/.local/share/applications に .desktop（StartupWMClass 付き、LF）を用意する。実機で確認。
 - Linux: 「システムの音」の取り込み先として出力デバイス（sink）を選べるようにした（libpulse で列挙）。実機で確認。
+- 不具合修正 (macOS): メニューバーのアイコンをクリックしてもメニューが出なかった。JUCE は非推奨の
+  popUpStatusItemMenu を使い、MenuBarModel がないと項目の処理も呼ばない。NSMenu を自前で作って
+  NSStatusItem に結び付けた。インストール版（CI の dmg）で確認。
 - Windows の Release 版 exe に、ファイアウォールの「ブロック」ルールが付いていた（初回の確認ダイアログでブロックされたとみられる）。
   インストーラでは許可ルールを追加できる。
 - ドキュメント: README（日本語 / 英語）、[BUILDING.md](BUILDING.md)、[TESTING.md](TESTING.md)、CHANGELOG を整備した。
