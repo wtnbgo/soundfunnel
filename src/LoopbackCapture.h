@@ -9,11 +9,11 @@
     Windows: WASAPI loopback on a render endpoint (shared mode).
     Linux:   the monitor source of the default output via PulseAudio / PipeWire
              (libpulse-simple, loaded at run time).
-    macOS:   not supported yet (see docs/PLAN.md); use a virtual device such as BlackHole.
+    macOS:   a Core Audio process tap on all processes (macOS 14.2+), in LoopbackCapture_mac.mm.
 
     Audio is delivered on an internal thread in the device's mix format,
     converted to float, non-interleaved. WASAPI delivers no packets while nothing
-    is playing, so the gaps are filled with silence to keep a steady stream. */
+    is playing, so on Windows the gaps are filled with silence to keep a steady stream. */
 class LoopbackCapture : private juce::Thread
 {
 public:

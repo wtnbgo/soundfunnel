@@ -9,7 +9,7 @@ A tray app that gathers the audio of several PCs on a LAN and plays it on one "s
 - Any PC can press "Make this PC the server". The **last PC that pressed it** becomes the server,
   and every other PC streams its audio there.
 - Each client sends either its **audio input** (microphone / line in) or **what it is playing**
-  (system audio, Windows / Linux).
+  (system audio; macOS 14.2 or later).
 - The server can mute each client and set its volume.
 - The server does not play its own input by default (avoids feedback).
 
@@ -33,12 +33,13 @@ Download the file for your OS from [Releases](https://github.com/wtnbgo/soundfun
 Release builds are not signed with an Apple Developer ID yet. The first time, right-click
 (Control-click) `SoundFunnel.app` in Finder and choose **Open**.
 
-Allow both permission prompts:
+Allow the permission prompts:
 
 - **Microphone**: needed to send audio input. It is also asked when a device that has inputs
   (BlackHole etc.) is opened.
 - **Local Network**: needed to find the other PCs. Without it no other PC is visible.
   (System Settings > Privacy & Security > Local Network)
+- **System Audio Recording**: needed to send System audio (macOS 14.2+).
 
 ## Usage
 
@@ -51,12 +52,13 @@ Allow both permission prompts:
    Pressing it on another PC later moves the server there.
 4. On each client choose what to send (Sending tab): **Audio input**, or **System audio**
    (Windows: pick the output device to capture, default follows the system default;
+   macOS 14.2+: every app's output mixed together;
    Linux: the default output's monitor via PulseAudio / PipeWire).
    For audio input, choose the input device on the Audio tab.
 5. On the server's Status tab, each client shows whether audio arrives and its level, with mute
    and volume controls. A muted client stops sending.
 
-On macOS, system audio can be sent through a virtual device for now
+Before macOS 14.2, system audio can be sent through a virtual device
 ([BlackHole](https://github.com/ExistentialAudio/BlackHole)) selected as the input.
 
 ### Network
@@ -74,7 +76,7 @@ encrypted. Use it on a trusted LAN.
 | Option | Meaning |
 |---|---|
 | `--background` | Start in the tray without opening the window (used for autostart) |
-| `--loopback` | Send system audio for this run (Windows / Linux); `--loopback-device NAME` picks the output |
+| `--loopback` | Send system audio for this run; `--loopback-device NAME` picks the output |
 | `--profile NAME` | Use separate settings (several instances on one PC for testing) |
 | `--silent` | Do not open an output device (testing) |
 | `--test-tone` | Send a 440 Hz tone instead of the input (testing) |

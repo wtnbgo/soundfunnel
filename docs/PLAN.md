@@ -97,7 +97,7 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
 | OS | 方法 | 予定 |
 |---|---|---|
 | Windows | WASAPI ループバック（出力デバイスを録音） | **実装済み（M4）**。`LoopbackCapture` が取り込みスレッドで AOO の source を直接駆動する（オーディオデバイス不要） |
-| macOS | 14.2+ の Core Audio Process Tap / それ以前は BlackHole 等の仮想デバイス | M5 で Process Tap を検討。当面は仮想デバイス |
+| macOS | 14.2+ の Core Audio Process Tap / それ以前は BlackHole 等の仮想デバイス | **実装済み（M5）**。全プロセスのタップを非公開の集約デバイス経由で読む |
 | Linux | PulseAudio / PipeWire の monitor ソース | **実装済み（M5）**。libpulse-simple を dlopen し `@DEFAULT_MONITOR@` を読む |
 
 ### 3.5 常駐動作
@@ -150,7 +150,7 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
   タグ `vX.Y.Z` を push すると下書きのリリースを作る（手順は [BUILDING.md](BUILDING.md)）。
 - アプリアイコンを追加した（`tools/make_icon.py` で生成）。
 - M5: Linux のシステムの音（PulseAudio / PipeWire の `@DEFAULT_MONITOR@`）を実装し、実機で取り込みと送信を確認した。
-  macOS は 14.2+ の Core Audio プロセスタップで実装した（実機確認はこれから）。
+  macOS は 14.2+ の Core Audio プロセスタップで実装し、実機（macOS 15.8 Intel）で取り込みと送信を確認した。
 - 不具合修正: サーバが新しいポートで再起動すると、クライアントの最初のフォーマット通知が捨てられ、
   compact data には source id がないため二度と受信が始まらなかった。応答が来るまで 2 秒ごとに送り直す（Windows と Linux の実機で、サーバの再起動から自動で戻ることを確認）。
 - Windows の Release 版 exe に、ファイアウォールの「ブロック」ルールが付いていた（初回の確認ダイアログでブロックされたとみられる）。
@@ -167,8 +167,8 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
   毎回取り直す。固定の Developer ID で署名・公証する (M6)。初回起動時の許可の案内も UI に出したい。
 - サーバでの受信レベルが、Mac から（0.14）と Windows・Linux から（0.10）で少し違った。
   サンプルレート変換かピークの測り方によるものとみられる。実害はないが、あとで確認する。
-- macOS のシステムの音の取り込み（M5）: macOS 14.2+ の Core Audio Process Tap を検討する。
-  当面は仮想デバイス経由で案内している。
+- macOS: 初回起動時、許可ダイアログに答えるまで約 11 秒、状態ファイルが作られなかった
+  （起動処理がマイク許可の確認で止まっている可能性）。UI が止まるかも含めて調べる。
 - Linux のシステムの音: いまは既定の出力のモニタのみ。出力デバイスの選択（sink の列挙）は未対応。
 - Windows インストーラの実機での確認（CI でビルドのみ確認）。
 - 音声デバイスを 1 つも開いていないとオーディオのコールバックが動かず、サーバが受信音を処理できない。
