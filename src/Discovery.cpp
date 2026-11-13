@@ -424,8 +424,16 @@ void Discovery::receiveOne()
         }
         else
         {
-            // a new run of that node: only if it is newer than what we accepted before
-            if (d.sentMs <= st->second.sentMs) return;
+            // A new run of that node: accept it when it was sent later than the run we know
+            // (a recording of an earlier run can't be replayed). Also accept it
+            //  - without a send time, from a node that never sent one (an older SoundFunnel), and
+            //  - from the address we already trust once that one has gone quiet: the node really
+            //    restarted, its clock may just have stepped back.
+            const auto& s = st->second;
+            const bool newer = d.sentMs > s.sentMs;
+            const bool legacy = d.sentMs == 0 && s.sentMs == 0;   // never downgrade once a node sent times
+            const bool restartedInPlace = senderIP == s.pinnedIp && now - s.pinnedSeenMs >= (uint32) kPeerTimeoutMs;
+            if (! (newer || legacy || restartedInPlace)) return;
             st->second = { d.session, d.seq, d.sentMs, senderIP, now };
         }
 
