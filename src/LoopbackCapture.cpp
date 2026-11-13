@@ -24,6 +24,12 @@ void LoopbackCapture::stop()
 }
 
 String LoopbackCapture::getLastError() const    { const ScopedLock sl (infoLock); return lastError; }
+
+bool LoopbackCapture::isSettled() const
+{
+    const ScopedLock sl (infoLock);
+    return description.isNotEmpty() || lastError.isNotEmpty() || ! isThreadRunning();
+}
 String LoopbackCapture::getDescription() const  { const ScopedLock sl (infoLock); return description; }
 
 void LoopbackCapture::setError (const String& e)

@@ -50,6 +50,7 @@ public:
     void setLoopback (bool enabled, const juce::String& deviceName);
     bool isLoopbackEnabled() const      { return loopbackOn.load(); }
     juce::String getLoopbackStatus() const;   // device description, or the error; empty when off
+    bool isLoopbackSettled() const      { return ! loopbackOn.load() || loopback.isSettled(); }
     juce::String getLoopbackError() const     { return loopbackOn.load() ? loopback.getLastError() : juce::String(); }
 
     // --- status (any thread) -------------------------------------------------

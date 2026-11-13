@@ -33,8 +33,39 @@ AppCore::AppCore (const Options& options) : config (options.profile), opts (opti
     {
         if (weak.expired()) return;
         if (! granted) Logger::writeToLog ("microphone permission denied: input stays closed");
-        openAudioDevice (granted);
+        micSettled = true;
+        micAllowed = granted;
+        openAudioDeviceWhenReady();
     });
+}
+
+void AppCore::openAudioDeviceWhenReady()
+{
+    if (audioOpened || ! micSettled) return;
+
+   #if JUCE_MAC
+    // The system audio tap creates a private aggregate device. JUCE rescans the device list on
+    // the message thread when it appears, and querying that device blocks inside CoreAudio
+    // until the "System Audio Recording" prompt is answered, freezing the whole app.
+    // So the CoreAudio device layer is only created once the capture has started (or failed).
+    if (! engine.isLoopbackSettled())
+    {
+        if (! isTimerRunning())
+        {
+            Logger::writeToLog ("waiting for system audio capture to start");
+            startTimer (200);
+        }
+        return;
+    }
+   #endif
+
+    stopTimer();
+    openAudioDevice (micAllowed);
+}
+
+void AppCore::timerCallback()
+{
+    openAudioDeviceWhenReady();
 }
 
 void AppCore::openAudioDevice (bool micAllowed)
@@ -58,6 +89,7 @@ void AppCore::openAudioDevice (bool micAllowed)
 
 AppCore::~AppCore()
 {
+    stopTimer();
     alive.reset();
     discovery.setListener (nullptr);
     discovery.stop();

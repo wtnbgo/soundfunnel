@@ -35,6 +35,9 @@ public:
     void stop();
     bool isActive() const                   { return isThreadRunning(); }
 
+    /** True once capturing has started or failed (i.e. no permission prompt is pending). */
+    bool isSettled() const;
+
     juce::String getLastError() const;
     juce::String getDescription() const;    // e.g. "Speakers (Realtek) 48000 Hz 2 ch"
 

@@ -11,7 +11,8 @@
 /** Ties discovery, server election and the audio engine together.
     Lives on the message thread; UI listens via ChangeBroadcaster. */
 class AppCore : public juce::ChangeBroadcaster,
-                private Discovery::Listener
+                private Discovery::Listener,
+                private juce::Timer
 {
 public:
     enum class Role { NoGroup, NoServer, ServerOffline, Client, Server };
@@ -71,11 +72,14 @@ private:
     void pushLocalInfo();
     ServerClaim highestKnownClaim() const;
     void openAudioDevice (bool micAllowed);
+    void openAudioDeviceWhenReady();
+    void timerCallback() override;
 
     AppConfig config;
     Options opts;
     std::shared_ptr<bool> alive = std::make_shared<bool> (true);
     bool audioOpened = false;
+    bool micSettled = false, micAllowed = false;
     juce::AudioDeviceManager deviceManager;
     AudioEngine engine;
     Discovery discovery;

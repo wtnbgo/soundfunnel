@@ -299,30 +299,57 @@ namespace
     class AudioPage : public Component, private ChangeListener
     {
     public:
-        explicit AudioPage (AppCore& c)
-            : core (c), selector (c.getDeviceManager(), 0, 2, 0, 2, false, false, true, false)
+        explicit AudioPage (AppCore& c) : core (c)
         {
             hint.setText (TRANS ("Input = what this PC sends. Output = where the server plays."), dontSendNotification);
             hint.setColour (Label::textColourId, Colours::grey);
             addAndMakeVisible (hint);
-            addAndMakeVisible (selector);
-            core.getDeviceManager().addChangeListener (this);
+
+            // The selector creates the audio device types (and scans devices), so it is only
+            // made once AppCore has opened the device: before that a permission prompt may be
+            // pending, and a CoreAudio scan would block until it is answered.
+            waiting.setText (TRANS ("Waiting for audio permission..."), dontSendNotification);
+            waiting.setJustificationType (Justification::centred);
+            addAndMakeVisible (waiting);
+
+            core.addChangeListener (this);
+            createSelectorIfReady();
         }
-        ~AudioPage() override { core.getDeviceManager().removeChangeListener (this); }
+
+        ~AudioPage() override
+        {
+            core.removeChangeListener (this);
+            if (selector != nullptr) core.getDeviceManager().removeChangeListener (this);
+        }
 
         void resized() override
         {
             auto r = getLocalBounds().reduced (8);
             hint.setBounds (r.removeFromTop (24));
-            selector.setBounds (r);
+            waiting.setBounds (r);
+            if (selector != nullptr) selector->setBounds (r);
         }
 
     private:
-        void changeListenerCallback (ChangeBroadcaster*) override { core.saveAudioDeviceState(); }
+        void createSelectorIfReady()
+        {
+            if (selector != nullptr || ! core.isAudioDeviceOpened()) return;
+            selector = std::make_unique<AudioDeviceSelectorComponent> (core.getDeviceManager(), 0, 2, 0, 2, false, false, true, false);
+            addAndMakeVisible (*selector);
+            waiting.setVisible (false);
+            core.getDeviceManager().addChangeListener (this);
+            resized();
+        }
+
+        void changeListenerCallback (ChangeBroadcaster* src) override
+        {
+            if (src == &core.getDeviceManager()) core.saveAudioDeviceState();
+            else                                 createSelectorIfReady();
+        }
 
         AppCore& core;
-        Label hint;
-        AudioDeviceSelectorComponent selector;
+        Label hint, waiting;
+        std::unique_ptr<AudioDeviceSelectorComponent> selector;
     };
 
     //==========================================================================

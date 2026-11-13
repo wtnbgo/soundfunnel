@@ -16,6 +16,7 @@ countries: jp
 "Audio" = "オーディオ"
 "Send format" = "送信形式"
 "Sending" = "送信"
+"Waiting for audio permission..." = "オーディオの許可を待っています..."
 "Send" = "送るもの"
 "Audio input (microphone / line in)" = "音声入力 (マイク / ライン入力)"
 "System audio (what this PC plays)" = "システムの音 (このPCで再生中の音)"
