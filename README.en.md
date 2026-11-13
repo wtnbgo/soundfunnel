@@ -58,6 +58,10 @@ Allow the permission prompts:
 5. On the server's Status tab, each client shows whether audio arrives and its level, with mute
    and volume controls. A muted client stops sending.
 
+On Windows, "Input / Output: follow the Windows default device" on the Audio tab switches
+automatically when the default device changes in the Windows sound settings
+(picking a device by hand turns it off).
+
 Before macOS 14.2, system audio can be sent through a virtual device
 ([BlackHole](https://github.com/ExistentialAudio/BlackHole)) selected as the input.
 

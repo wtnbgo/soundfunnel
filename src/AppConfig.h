@@ -58,6 +58,10 @@ public:
     float getClientGain (const juce::String& id) const;
     void setClientGain (const juce::String& id, float);
 
+    // follow the OS default input / output device (Windows)
+    bool getFollowDefaultDevice (bool input) const;
+    void setFollowDefaultDevice (bool input, bool);
+
     std::unique_ptr<juce::XmlElement> getAudioDeviceState() const;
     void setAudioDeviceState (const juce::XmlElement*);
 

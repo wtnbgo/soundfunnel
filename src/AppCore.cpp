@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AppCore.h"
 #include "MicPermission.h"
+#include "DefaultDevices.h"
 
 using namespace juce;
 
@@ -84,12 +85,74 @@ void AppCore::openAudioDevice (bool micAllowed)
         Logger::writeToLog ("audio device: none");
 
     audioOpened = true;
+
+    if (DefaultDevices::isSupported())
+    {
+        applyDefaultDevices();
+        defaultWatcher.tick = [this] { applyDefaultDevices(); };
+        defaultWatcher.startTimer (2000);
+    }
+    sendChangeMessage();
+}
+
+void AppCore::applyDefaultDevices()
+{
+    const bool followIn  = config.getFollowDefaultDevice (true);
+    const bool followOut = config.getFollowDefaultDevice (false);
+    if (! audioOpened || (! followIn && ! followOut)) return;
+
+    // device names only match the WASAPI shared-mode type
+    if (deviceManager.getCurrentAudioDeviceType() != DefaultDevices::deviceTypeName()) return;
+
+    auto setup = deviceManager.getAudioDeviceSetup();
+    bool changed = false;
+
+    const bool wantInput = opts.openInput && micAllowed && ! isLoopbackSource();
+    if (followIn && wantInput)
+    {
+        auto name = DefaultDevices::getName (true);
+        if (name.isNotEmpty() && setup.inputDeviceName != name)
+        {
+            setup.inputDeviceName = name;
+            setup.useDefaultInputChannels = true;
+            changed = true;
+        }
+        appliedDefaultIn = name.isNotEmpty() ? name : setup.inputDeviceName;
+    }
+    if (followOut && opts.openOutput)
+    {
+        auto name = DefaultDevices::getName (false);
+        if (name.isNotEmpty() && setup.outputDeviceName != name)
+        {
+            setup.outputDeviceName = name;
+            setup.useDefaultOutputChannels = true;
+            changed = true;
+        }
+        appliedDefaultOut = name.isNotEmpty() ? name : setup.outputDeviceName;
+    }
+
+    if (changed)
+    {
+        Logger::writeToLog ("following the default device: in \"" + setup.inputDeviceName + "\", out \"" + setup.outputDeviceName + "\"");
+        auto err = deviceManager.setAudioDeviceSetup (setup, true);
+        if (err.isNotEmpty()) Logger::writeToLog ("audio device: " + err);
+        saveAudioDeviceState();
+    }
+}
+
+void AppCore::setFollowDefaultDevice (bool input, bool on)
+{
+    config.setFollowDefaultDevice (input, on);
+    config.save();
+    (input ? appliedDefaultIn : appliedDefaultOut).clear();
+    applyDefaultDevices();
     sendChangeMessage();
 }
 
 AppCore::~AppCore()
 {
     stopTimer();
+    defaultWatcher.stopTimer();
     alive.reset();
     discovery.setListener (nullptr);
     discovery.stop();
@@ -320,6 +383,20 @@ bool AppCore::isLoopbackSource() const
 
 void AppCore::saveAudioDeviceState()
 {
+    // a device picked by hand (not by applyDefaultDevices) ends following for that direction
+    auto setup = deviceManager.getAudioDeviceSetup();
+    for (bool input : { true, false })
+    {
+        const auto& applied = input ? appliedDefaultIn : appliedDefaultOut;
+        const auto& current = input ? setup.inputDeviceName : setup.outputDeviceName;
+        if (config.getFollowDefaultDevice (input) && applied.isNotEmpty() && current.isNotEmpty() && current != applied)
+        {
+            config.setFollowDefaultDevice (input, false);
+            Logger::writeToLog (String (input ? "input" : "output") + " device chosen by hand: no longer following the default");
+            sendChangeMessage();
+        }
+    }
+
     auto xml = deviceManager.createStateXml();
     config.setAudioDeviceState (xml.get());
     config.save();

@@ -4,6 +4,7 @@
 #include "Codecs.h"
 #include "BinaryData.h"
 #include "LoopbackCapture.h"
+#include "DefaultDevices.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -309,6 +310,17 @@ namespace
             // The selector creates the audio device types (and scans devices), so it is only
             // made once AppCore has opened the device: before that a permission prompt may be
             // pending, and a CoreAudio scan would block until it is answered.
+            if (DefaultDevices::isSupported())
+            {
+                followIn.setButtonText (TRANS ("Input: follow the Windows default device"));
+                followOut.setButtonText (TRANS ("Output: follow the Windows default device"));
+                followIn.onClick  = [this] { core.setFollowDefaultDevice (true,  followIn.getToggleState()); };
+                followOut.onClick = [this] { core.setFollowDefaultDevice (false, followOut.getToggleState()); };
+                addAndMakeVisible (followIn);
+                addAndMakeVisible (followOut);
+                refreshFollow();
+            }
+
             waiting.setText (TRANS ("Waiting for audio permission..."), dontSendNotification);
             waiting.setJustificationType (Justification::centred);
             addAndMakeVisible (waiting);
@@ -327,6 +339,12 @@ namespace
         {
             auto r = getLocalBounds().reduced (8);
             hint.setBounds (r.removeFromTop (24));
+            if (followIn.isVisible())
+            {
+                followIn.setBounds (r.removeFromTop (24));
+                followOut.setBounds (r.removeFromTop (24));
+                r.removeFromTop (4);
+            }
             waiting.setBounds (r);
             if (selector != nullptr) selector->setBounds (r);
         }
@@ -346,10 +364,18 @@ namespace
         {
             if (src == &core.getDeviceManager()) core.saveAudioDeviceState();
             else                                 createSelectorIfReady();
+            refreshFollow();
+        }
+
+        void refreshFollow()
+        {
+            followIn.setToggleState (core.isFollowingDefaultDevice (true), dontSendNotification);
+            followOut.setToggleState (core.isFollowingDefaultDevice (false), dontSendNotification);
         }
 
         AppCore& core;
         Label hint, waiting;
+        ToggleButton followIn, followOut;
         std::unique_ptr<AudioDeviceSelectorComponent> selector;
     };
 

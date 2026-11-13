@@ -16,6 +16,8 @@ countries: jp
 "Audio" = "オーディオ"
 "Send format" = "送信形式"
 "Sending" = "送信"
+"Input: follow the Windows default device" = "入力: Windows の既定のデバイスに合わせる"
+"Output: follow the Windows default device" = "出力: Windows の既定のデバイスに合わせる"
 "Waiting for audio permission..." = "オーディオの許可を待っています..."
 "Send" = "送るもの"
 "Audio input (microphone / line in)" = "音声入力 (マイク / ライン入力)"

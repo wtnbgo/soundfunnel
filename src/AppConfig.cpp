@@ -57,6 +57,9 @@ void AppConfig::setJitterBufferMs (int v)            { props->setValue ("jitterB
 bool AppConfig::getMonitorLocalWhenServer() const    { return props->getBoolValue ("monitorLocal", false); }
 void AppConfig::setMonitorLocalWhenServer (bool v)   { props->setValue ("monitorLocal", v); }
 
+bool AppConfig::getFollowDefaultDevice (bool in) const { return props->getBoolValue (in ? "followDefaultInput" : "followDefaultOutput", false); }
+void AppConfig::setFollowDefaultDevice (bool in, bool v) { props->setValue (in ? "followDefaultInput" : "followDefaultOutput", v); }
+
 AppConfig::Source AppConfig::getSendSource() const   { return props->getIntValue ("sendSource", 0) == 1 ? Source::loopback : Source::input; }
 void AppConfig::setSendSource (Source s)             { props->setValue ("sendSource", (int) s); }
 String AppConfig::getLoopbackDevice() const          { return props->getValue ("loopbackDevice"); }

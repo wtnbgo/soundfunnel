@@ -66,6 +66,11 @@ public:
     void saveAudioDeviceState();
     bool isAudioDeviceOpened() const                { return audioOpened; }
 
+    /** Follow the OS default input / output device (Windows, "Windows Audio" type).
+        Choosing a device by hand in the selector turns following off for that direction. */
+    bool isFollowingDefaultDevice (bool input) const { return config.getFollowDefaultDevice (input); }
+    void setFollowDefaultDevice (bool input, bool);
+
 private:
     void discoveryChanged() override;
     void reconcile();
@@ -74,6 +79,15 @@ private:
     void openAudioDevice (bool micAllowed);
     void openAudioDeviceWhenReady();
     void timerCallback() override;
+    void applyDefaultDevices();
+
+    struct DefaultDeviceWatcher : public juce::Timer
+    {
+        std::function<void()> tick;
+        void timerCallback() override { tick(); }
+    };
+    DefaultDeviceWatcher defaultWatcher;
+    juce::String appliedDefaultIn, appliedDefaultOut;   // what we last switched to
 
     AppConfig config;
     Options opts;
