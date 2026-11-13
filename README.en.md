@@ -50,11 +50,12 @@ Allow the permission prompts:
 2. Set the same **group key** on every PC (Group tab). Only PCs with the same key see each other.
 3. On the PC that should play the audio, press **Make this PC the server** (Status tab).
    Pressing it on another PC later moves the server there.
-4. On each client choose what to send (Sending tab): **Audio input**, or **System audio**
-   (Windows: pick the output device to capture, default follows the system default;
-   macOS 14.2+: every app's output mixed together;
-   Linux: pick an output; its PulseAudio / PipeWire monitor is captured).
-   For audio input, choose the input device on the Audio tab.
+4. On each client choose what to send (Sending tab):
+   - **System audio** (the default where it is available): what this PC plays.
+     Windows: pick the output device to capture (default follows the system default);
+     macOS 14.2+: every app's output mixed together;
+     Linux: pick an output; its PulseAudio / PipeWire monitor is captured.
+   - **Audio input**: choose the input device on the Audio tab.
 5. On the server's Status tab, each client shows whether audio arrives and its level, with mute
    and volume controls. A muted client stops sending.
 

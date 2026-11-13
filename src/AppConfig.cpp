@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AppConfig.h"
 #include "Codecs.h"
+#include "LoopbackCapture.h"
 
 using namespace juce;
 
@@ -60,7 +61,13 @@ void AppConfig::setMonitorLocalWhenServer (bool v)   { props->setValue ("monitor
 bool AppConfig::getFollowDefaultDevice (bool in) const { return props->getBoolValue (in ? "followDefaultInput" : "followDefaultOutput", false); }
 void AppConfig::setFollowDefaultDevice (bool in, bool v) { props->setValue (in ? "followDefaultInput" : "followDefaultOutput", v); }
 
-AppConfig::Source AppConfig::getSendSource() const   { return props->getIntValue ("sendSource", 0) == 1 ? Source::loopback : Source::input; }
+AppConfig::Source AppConfig::getSendSource() const
+{
+    // not chosen yet: send what this PC plays, where that is possible
+    if (! props->containsKey ("sendSource"))
+        return LoopbackCapture::isSupported() ? Source::loopback : Source::input;
+    return props->getIntValue ("sendSource", 0) == 1 ? Source::loopback : Source::input;
+}
 void AppConfig::setSendSource (Source s)             { props->setValue ("sendSource", (int) s); }
 String AppConfig::getLoopbackDevice() const          { return props->getValue ("loopbackDevice"); }
 void AppConfig::setLoopbackDevice (const String& d)  { props->setValue ("loopbackDevice", d); }

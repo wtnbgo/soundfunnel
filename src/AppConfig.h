@@ -39,7 +39,8 @@ public:
     bool getMonitorLocalWhenServer() const;
     void setMonitorLocalWhenServer (bool);
 
-    // what a client sends: the audio input device, or what this PC plays (loopback)
+    // what a client sends: the audio input device, or what this PC plays (loopback);
+    // defaults to loopback where it is supported
     enum class Source { input = 0, loopback = 1 };
     Source getSendSource() const;
     void setSendSource (Source);
