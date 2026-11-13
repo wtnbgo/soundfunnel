@@ -9,6 +9,8 @@
 #include "Localisation.h"
 #include "SettingsWindow.h"
 #include "TrayIcon.h"
+#include "LoopbackCapture.h"
+#include <iostream>
 #if JUCE_LINUX || JUCE_BSD
  #include "LinuxTray.h"
 #endif
@@ -39,7 +41,8 @@ public:
     {
         // test profiles may run side by side; the normal app is single-instance
         return getCommandLineParameterArray().contains ("--profile")
-            || getCommandLineParameterArray().contains ("--selftest");
+            || getCommandLineParameterArray().contains ("--selftest")
+            || getCommandLineParameterArray().contains ("--list-loopback-devices");
     }
 
     void initialise (const String&) override
@@ -60,6 +63,18 @@ public:
         {
             logger.reset (new TimestampedLogger (File (lf), "SoundFunnel " + getApplicationVersion() + " " + args.joinIntoString (" ")));
             Logger::setCurrentLogger (logger.get());
+        }
+
+        if (args.contains ("--list-loopback-devices"))
+        {
+            // names accepted by --loopback-device (and shown under "Capture from")
+            if (! LoopbackCapture::isSupported())
+                std::cout << "capturing system audio is not supported here" << std::endl;
+            else
+                for (auto& n : LoopbackCapture::getDeviceNames())
+                    std::cout << n << std::endl;
+            quit();
+            return;
         }
 
         if (args.contains ("--selftest"))

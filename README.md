@@ -127,6 +127,7 @@ Linux の「システムの音」は PulseAudio か PipeWire（pipewire-pulse）
 | `--test-tone` | 入力の代わりに 440 Hz のテスト音を送る（テスト用） |
 | `--status-file F` / `--control-file F` | 状態の JSON 出力 / コマンドファイルでの操作（テスト用、[docs/TESTING.md](docs/TESTING.md)） |
 | `--log-file F` | ログをファイルに書く |
+| `--list-loopback-devices` | 「システムの音」で取り込める出力デバイスの名前を表示して終了する |
 | `--selftest` | プロトコルの自己テストを実行して終了する |
 
 ### 設定ファイルの場所

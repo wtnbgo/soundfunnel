@@ -82,6 +82,7 @@ encrypted. Use it on a trusted LAN.
 | `--test-tone` | Send a 440 Hz tone instead of the input (testing) |
 | `--status-file F` / `--control-file F` | JSON status output / command file control ([docs/TESTING.md](docs/TESTING.md)) |
 | `--log-file F` | Write a log file |
+| `--list-loopback-devices` | Print the output devices that system audio can be captured from, then exit |
 | `--selftest` | Run the protocol self test and exit |
 
 ## Building from source
