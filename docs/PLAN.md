@@ -157,6 +157,11 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
   プロセスタップの集約デバイスができると JUCE がメインスレッドでデバイスを再走査し、その問い合わせが
   「システムオーディオ録音」の許可待ちで CoreAudio 内でブロックしていた。取り込みが始まるまで JUCE の
   デバイス層を作らないようにし、実機で許可待ちの間もメインスレッドが止まらないことを確認した。
+- 不具合修正 (Linux): 日本語が文字化けしていた。JUCE 7 は Linux で .ttc を走査しないため、Noto Sans CJK
+  （.ttc で配布）が見つからなかった。fc-match などで日本語フォントのファイルを探し、メモリから読み込む。
+- Linux: Dock のアイコンが歯車になっていた。ウィンドウにアイコン（_NET_WM_ICON）を設定し、パッケージで
+  入れていない場合は ~/.local/share/applications に .desktop（StartupWMClass 付き、LF）を用意する。実機で確認。
+- Linux: 「システムの音」の取り込み先として出力デバイス（sink）を選べるようにした（libpulse で列挙）。実機で確認。
 - Windows の Release 版 exe に、ファイアウォールの「ブロック」ルールが付いていた（初回の確認ダイアログでブロックされたとみられる）。
   インストーラでは許可ルールを追加できる。
 - ドキュメント: README（日本語 / 英語）、[BUILDING.md](BUILDING.md)、[TESTING.md](TESTING.md)、CHANGELOG を整備した。
@@ -166,7 +171,7 @@ SonoBus をコードベースとし、セッション・録音・エフェクト
 - Linux のトレイ: JUCE の Linux 版トレイ (XEmbed) は GNOME で gnome-shell を落としたため使わない。
   libayatana-appindicator を dlopen して StatusNotifierItem で出すようにした。D-Bus に
   org.kde.StatusNotifierWatcher がない環境（AppIndicator 拡張が無効な GNOME など）では作らず、ウィンドウで動く。
-  拡張が有効な環境でアイコンが出ることは未確認。
+  Ubuntu（GNOME、AppIndicator 拡張を有効化）の実機で、トップバーに状態のアイコンとメニューが出ることを確認した。
 - macOS: ad-hoc 署名だとビルドのたびに別アプリ扱いになり、マイクとローカルネットワークの許可を
   毎回取り直す。固定の Developer ID で署名・公証する (M6)。初回起動時の許可の案内も UI に出したい。
 - サーバでの受信レベルが、Mac から（0.14）と Windows・Linux から（0.10）で少し違った。

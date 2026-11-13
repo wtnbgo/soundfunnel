@@ -16,3 +16,5 @@
 - インストーラ: Windows（Inno Setup）、macOS（dmg）、Linux（.deb / tar.gz）
 - GitHub Actions による 3 OS のビルド・自己テスト・パッケージ作成
 - サーバが再起動しても、クライアントが自動でつながり直す
+- Linux: 日本語フォント（.ttc の Noto Sans CJK）の読み込み、Dock / アプリ一覧のアイコン
+- `--list-loopback-devices`: 「システムの音」で取り込める出力デバイスを表示
