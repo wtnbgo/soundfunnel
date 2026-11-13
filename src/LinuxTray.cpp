@@ -153,7 +153,7 @@ LinuxTray::LinuxTray (AppCore& c, Api& a, std::function<void()> o, std::function
     iconDir.createDirectory();
     for (auto role : { AppCore::Role::NoGroup, AppCore::Role::Client, AppCore::Role::Server })
     {
-        auto img = TrayIcon::makeIcon (role, 64);
+        auto img = TrayIcon::makeIcon (role, 128);
         FileOutputStream out (iconDir.getChildFile (iconNameFor (role) + ".png"));
         if (out.openedOk())
         {
@@ -163,7 +163,9 @@ LinuxTray::LinuxTray (AppCore& c, Api& a, std::function<void()> o, std::function
         }
     }
 
-    indicator = api.app_indicator_new_with_path ("soundfunnel", iconNameFor (AppCore::Role::NoGroup).toRawUTF8(),
+    // icons are given as absolute file paths: the GNOME AppIndicator extension did not pick
+    // them up by name from the theme path (it showed a generic gear icon)
+    indicator = api.app_indicator_new_with_path ("soundfunnel", iconPathFor (AppCore::Role::NoGroup).toRawUTF8(),
                                                  kCategoryApplicationStatus, iconDir.getFullPathName().toRawUTF8());
     api.app_indicator_set_title (indicator, "SoundFunnel");
 
@@ -204,6 +206,11 @@ LinuxTray::~LinuxTray()
     iconDir.deleteRecursively();
 }
 
+String LinuxTray::iconPathFor (AppCore::Role r)
+{
+    return iconDir.getChildFile (iconNameFor (r) + ".png").getFullPathName();
+}
+
 String LinuxTray::iconNameFor (AppCore::Role r)
 {
     return r == AppCore::Role::Server ? "soundfunnel-server"
@@ -227,7 +234,7 @@ void LinuxTray::refresh()
     if (role != shownRole)
     {
         shownRole = role;
-        api.app_indicator_set_icon_full (indicator, iconNameFor (role).toRawUTF8(), "SoundFunnel");
+        api.app_indicator_set_icon_full (indicator, iconPathFor (role).toRawUTF8(), "SoundFunnel");
     }
 
     const auto status = core.getStatusText();

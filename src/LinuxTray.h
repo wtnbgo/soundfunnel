@@ -26,6 +26,7 @@ private:
     void timerCallback() override;
     void refresh();
     juce::String iconNameFor (AppCore::Role);
+    juce::String iconPathFor (AppCore::Role);
 
     static void onServer (void*, void* self);
     static void onPause (void*, void* self);
