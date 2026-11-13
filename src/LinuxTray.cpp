@@ -5,6 +5,7 @@
 #if JUCE_LINUX || JUCE_BSD
 #include <dlfcn.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 using namespace juce;
 
@@ -148,9 +149,15 @@ std::unique_ptr<LinuxTray> LinuxTray::create (AppCore& c, std::function<void()> 
 LinuxTray::LinuxTray (AppCore& c, Api& a, std::function<void()> o, std::function<void()> q)
     : core (c), api (a), openSettings (std::move (o)), quit (std::move (q))
 {
-    // the indicator host loads icons by name from this folder
-    iconDir = File::getSpecialLocation (File::tempDirectory).getChildFile ("soundfunnel-tray-" + String (getpid()));
+    // A predictable name in the shared /tmp would let another local user plant symlinks, so the
+    // icons go to a folder only this user can write: $XDG_RUNTIME_DIR (0700), else ~/.cache.
+    auto base = File (SystemStats::getEnvironmentVariable ("XDG_RUNTIME_DIR", {}));
+    if (base.getFullPathName().isEmpty() || ! base.isDirectory())
+        base = File::getSpecialLocation (File::userHomeDirectory).getChildFile (".cache");
+    iconDir = base.getChildFile ("soundfunnel-tray-" + String (getpid()));
+    iconDir.deleteRecursively();
     iconDir.createDirectory();
+    chmod (iconDir.getFullPathName().toRawUTF8(), 0700);
     for (auto role : { AppCore::Role::NoGroup, AppCore::Role::Client, AppCore::Role::Server })
     {
         auto img = TrayIcon::makeIcon (role, 128);

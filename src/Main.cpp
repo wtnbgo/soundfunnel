@@ -4,6 +4,10 @@
 
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <csignal>
+#if ! JUCE_WINDOWS
+ #include <sys/stat.h>
+ #include <unistd.h>
+#endif
 
 #include "AppCore.h"
 #include "Autostart.h"
@@ -174,15 +178,30 @@ public:
         SoundFunnelApplication& app;
     };
 
+    static bool isOwnedByCurrentUser (const File& f)
+    {
+       #if JUCE_WINDOWS
+        ignoreUnused (f);
+        return true;   // %TEMP% / profile folders are per user
+       #else
+        struct stat st {};
+        return ::lstat (f.getFullPathName().toRawUTF8(), &st) == 0 && S_ISREG (st.st_mode) && st.st_uid == ::getuid();
+       #endif
+    }
+
     void diagTick()
     {
         if (controlFile.isNotEmpty())
         {
             File f (controlFile);
-            if (f.existsAsFile())
+            if (f.existsAsFile() && ! f.isSymbolicLink())
             {
-                auto cmd = f.loadFileAsString().trim();
+                // commands are a few words; anything bigger, or a file another user planted,
+                // is not ours
+                const bool ok = f.getSize() <= 256 && isOwnedByCurrentUser (f);
+                auto cmd = ok ? f.loadFileAsString().trim() : String();
                 f.deleteFile();
+                if (! ok) return;
                 auto verb = cmd.upToFirstOccurrenceOf (" ", false, false);
                 auto arg  = cmd.fromFirstOccurrenceOf (" ", false, false);
                 if (verb == "server") core->becomeServer();

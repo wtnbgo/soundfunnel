@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "SettingsWindow.h"
+#include <random>
 #include "Autostart.h"
 #include "Codecs.h"
 #include "BinaryData.h"
@@ -398,6 +399,20 @@ namespace
             apply.setButtonText (TRANS ("Apply"));
             apply.onClick = [this] { core.applyIdentity (name.getText(), key.getText()); };
 
+            // The key protects the group: beacons can be recorded and short keys guessed offline.
+            generate.setButtonText (TRANS ("Generate"));
+            generate.setTooltip (TRANS ("Make a random key. Then enter the same key on the other PCs."));
+            generate.onClick = [this]
+            {
+                key.setText (makeRandomKey(), dontSendNotification);
+                key.setPasswordCharacter (0);
+                show.setToggleState (true, dontSendNotification);
+                updateKeyWarning();
+            };
+            key.onTextChange = [this] { updateKeyWarning(); };
+            keyWarning.setColour (Label::textColourId, Colours::orange);
+            updateKeyWarning();
+
             autostart.setButtonText (TRANS ("Start automatically at login"));
             autostart.setToggleState (Autostart::isEnabled(), dontSendNotification);
             autostart.onClick = [this] { Autostart::setEnabled (autostart.getToggleState()); };
@@ -407,7 +422,7 @@ namespace
 
             for (Component* comp : { (Component*) &nameLabel, (Component*) &keyLabel, (Component*) &name, (Component*) &key,
                                      (Component*) &show, (Component*) &help, (Component*) &apply, (Component*) &autostart,
-                                     (Component*) &portLabel })
+                                     (Component*) &portLabel, (Component*) &generate, (Component*) &keyWarning })
                 addAndMakeVisible (comp);
         }
 
@@ -416,7 +431,9 @@ namespace
             auto r = getLocalBounds().reduced (12);
             auto row = [&r] { auto x = r.removeFromTop (28); r.removeFromTop (8); return x; };
             auto a = row(); nameLabel.setBounds (a.removeFromLeft (120)); name.setBounds (a);
-            auto b = row(); keyLabel.setBounds (b.removeFromLeft (120)); show.setBounds (b.removeFromRight (80)); key.setBounds (b);
+            auto b = row(); keyLabel.setBounds (b.removeFromLeft (120)); show.setBounds (b.removeFromRight (80));
+            generate.setBounds (b.removeFromRight (90).reduced (4, 0)); key.setBounds (b);
+            keyWarning.setBounds (row());
             help.setBounds (row());
             apply.setBounds (row().removeFromLeft (120));
             r.removeFromTop (12);
@@ -425,11 +442,44 @@ namespace
         }
 
     private:
+        /** 20 random characters from a 32-letter alphabet without look-alikes (100 bits),
+            grouped for reading out: e.g. "K7QM2-XT9PD-4HWNA-R8ZEC". */
+        static String makeRandomKey()
+        {
+            static const char* alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            uint8 bytes[20];
+            fillSecureRandom (bytes, sizeof (bytes));
+            String k;
+            for (int i = 0; i < 20; ++i)
+            {
+                if (i > 0 && i % 5 == 0) k << "-";
+                k << String::charToString ((juce_wchar) alphabet[bytes[i] & 31]);
+            }
+            return k;
+        }
+
+        /** OS random source: std::random_device is non-deterministic on MSVC (rand_s),
+            libstdc++ and libc++ (/dev/urandom, getrandom, arc4random); juce::Random is not
+            meant for secrets. */
+        static void fillSecureRandom (uint8* out, size_t n)
+        {
+            std::random_device rd;
+            for (size_t i = 0; i < n; ++i) out[i] = (uint8) (rd() & 0xff);
+        }
+
+        void updateKeyWarning()
+        {
+            const auto k = key.getText().trim();
+            keyWarning.setText (k.isNotEmpty() && k.length() < 12
+                                    ? TRANS ("This key is short and could be guessed. Use 12 or more characters, or Generate.")
+                                    : String(), dontSendNotification);
+        }
+
         AppCore& core;
-        Label nameLabel, keyLabel, help, portLabel;
+        Label nameLabel, keyLabel, help, portLabel, keyWarning;
         TextEditor name, key;
         ToggleButton show, autostart;
-        TextButton apply;
+        TextButton apply, generate;
     };
 
     //==========================================================================

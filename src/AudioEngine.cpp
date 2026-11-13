@@ -368,17 +368,33 @@ bool AudioEngine::isServerReachable() const
 //==============================================================================
 void AudioEngine::doReceive()
 {
-    char buf[AOO_MAXPACKETSIZE];
+    // one spare byte: AOO's pattern parser uses sscanf / C strings on the packet, so the
+    // datagram is always NUL-terminated within the buffer
+    char buf[AOO_MAXPACKETSIZE + 1];
     String ip;
     int port = 0;
-    auto n = socket->read (buf, (int) sizeof (buf), false, ip, port);
+    auto n = socket->read (buf, AOO_MAXPACKETSIZE, false, ip, port);
     if (n <= 0) return;
+    buf[n] = 0;
     ++rx;
+
+    const ScopedReadLock sl (coreLock);
+
+    // only packets from an endpoint that discovery told us about reach the AOO parser
+    bool known = false;
+    if (role == Role::Server)
+    {
+        for (auto* s : sinks)
+            known |= (s->endpoint->port == port && s->endpoint->ip == ip);
+    }
+    else if (role == Role::Client && serverEndpoint != nullptr)
+    {
+        known = serverEndpoint->port == port && serverEndpoint->ip == ip;
+    }
+    if (! known || n < 4) { ++rxDropped; return; }
 
     int32_t type = 0, id = 0;
     if (aoo_parse_pattern (buf, n, &type, &id) <= 0) { ++rxDropped; return; }
-
-    const ScopedReadLock sl (coreLock);
 
     if (type == AOO_TYPE_SINK && role == Role::Server)
     {

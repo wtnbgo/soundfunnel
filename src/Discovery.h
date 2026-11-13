@@ -66,7 +66,9 @@ public:
 
     // exposed for tests
     static juce::MemoryBlock encode (const LocalInfo&, const juce::String& session, juce::uint64 seq);
-    struct Decoded { Peer peer; juce::String session; juce::uint64 seq = 0; };
+    struct Decoded { Peer peer; juce::String session; juce::uint64 seq = 0; juce::int64 sentMs = 0; };
+
+    static constexpr int kMaxPeers = 64;            // more than any LAN group needs
     static bool decode (const void* data, size_t size, const juce::String& groupKey, Decoded& out);
 
 private:
@@ -94,7 +96,22 @@ private:
     mutable juce::CriticalSection lock;
     LocalInfo local;
     std::map<juce::String, Peer> peers;
-    std::map<juce::String, std::pair<juce::String, juce::uint64>> lastSeq; // id -> (session, seq)
+    /** Replay / relay protection per node:
+        - within a session, sequence numbers must grow;
+        - a different session is only accepted if its send time is newer than the last
+          accepted one, so beacons recorded from an earlier run can't be replayed;
+        - within a session the sender address is pinned to the first one seen, and a copy
+          of a beacon from another address is ignored while the pinned one is still heard
+          (a relayed beacon can't move the peer, and with it our audio, elsewhere). */
+    struct SeqState
+    {
+        juce::String session;
+        juce::uint64 seq = 0;
+        juce::int64 sentMs = 0;
+        juce::String pinnedIp;
+        juce::uint32 pinnedSeenMs = 0;
+    };
+    std::map<juce::String, SeqState> lastSeq;       // node id -> state (kept after the peer leaves)
 
     const juce::String session { juce::Uuid().toString() };
     juce::uint64 seq = 0;

@@ -164,8 +164,17 @@ AppCore::~AppCore()
 ServerClaim AppCore::highestKnownClaim() const
 {
     auto best = config.getServerClaim();
+    if (! best.isValid()) best = {};
+    const auto own = best;
+
     for (auto& p : discovery.getPeers())
+    {
+        if (! p.claim.isValid()) continue;
+        // don't let one authenticated peer push the epoch far ahead of the group (it would
+        // stay adopted and saved everywhere); real claims only grow by one per press
+        if (own.isValid() && p.claim.epoch > own.epoch + ServerClaim::kMaxEpochJump) continue;
         if (best < p.claim) best = p.claim;
+    }
     return best;
 }
 
@@ -313,7 +322,7 @@ void AppCore::becomeServer()
 {
     auto c = highestKnownClaim();
     if (c.nodeId == config.getNodeId() && role == Role::Server) return;
-    config.setServerClaim ({ c.epoch + 1, config.getNodeId() });
+    config.setServerClaim ({ jmin (c.epoch, ServerClaim::kMaxEpoch - 1) + 1, config.getNodeId() });
     config.save();
     reconcile();
     discovery.sendBeaconSoon();
@@ -345,10 +354,14 @@ void AppCore::setClientGain (const String& id, float g)
 void AppCore::applyIdentity (const String& name, const String& key)
 {
     config.setNodeName (name.trim());
-    if (key != config.getGroupKey())
+    const bool keyChanged = key != config.getGroupKey();
+    if (keyChanged)
         config.setServerClaim ({});   // claims from another group mean nothing here
     config.setGroupKey (key);
     config.save();
+    // hand the new key to discovery first: that drops the old group's peers, so reconcile()
+    // can't pick up (and save) a claim that was only valid in the old group
+    if (keyChanged) pushLocalInfo();
     reconcile();
 }
 

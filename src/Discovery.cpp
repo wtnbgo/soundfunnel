@@ -171,6 +171,7 @@ MemoryBlock Discovery::encode (const LocalInfo& info, const String& sess, uint64
     o->setProperty ("id", info.nodeId);
     o->setProperty ("sess", sess);
     o->setProperty ("seq", String ((int64) sequence));
+    o->setProperty ("t", String (Time::currentTimeMillis()));
     o->setProperty ("name", info.name);
     o->setProperty ("port", info.audioPort);
     o->setProperty ("claim", claimToVar (info.claim));
@@ -216,17 +217,23 @@ bool Discovery::decode (const void* data, size_t size, const String& key, Decode
     auto v = JSON::parse (String::fromUTF8 ((const char*) p + kHeaderSize, (int) len));
     if (! v.isObject()) return false;
 
-    out.peer.id        = v["id"].toString();
-    out.peer.name      = v["name"].toString();
+    out.peer.id        = v["id"].toString().substring (0, 64);
+    out.peer.name      = v["name"].toString().substring (0, 64);
     out.peer.audioPort = (int) v["port"];
     out.peer.claim     = claimFromVar (v["claim"]);
-    out.peer.version   = v["app"].toString();
+    out.peer.version   = v["app"].toString().substring (0, 32);
     out.peer.muted.clear();
     if (auto* m = v["muted"].getArray())
-        for (auto& s : *m) out.peer.muted.add (s.toString());
-    out.session = v["sess"].toString();
+        for (auto& s : *m)
+            if (out.peer.muted.size() < kMaxPeers)
+                out.peer.muted.add (s.toString().substring (0, 64));
+    out.session = v["sess"].toString().substring (0, 64);
     out.seq     = (uint64) v["seq"].toString().getLargeIntValue();
-    return out.peer.id.isNotEmpty();
+    out.sentMs  = v["t"].toString().getLargeIntValue();
+
+    if (out.peer.audioPort < 0 || out.peer.audioPort > 65535) out.peer.audioPort = 0;
+    if (! out.peer.claim.isValid()) out.peer.claim = {};
+    return out.peer.id.isNotEmpty() && out.session.isNotEmpty();
 }
 
 //==============================================================================
@@ -392,13 +399,38 @@ void Discovery::receiveOne()
     {
         const ScopedLock sl (lock);
 
-        // drop duplicates (we receive both multicast and broadcast copies) and replays
-        auto& last = lastSeq[d.peer.id];
-        if (last.first == d.session && d.seq <= last.second) return;
-        last = { d.session, d.seq };
+        // verified with a key that has been replaced meanwhile: belongs to the old group
+        if (local.groupKey != key) return;
 
-        d.peer.ip = senderIP;
-        d.peer.lastSeenMs = Time::getMillisecondCounter();
+        const auto now = Time::getMillisecondCounter();
+        auto st = lastSeq.find (d.peer.id);
+
+        if (st == lastSeq.end())
+        {
+            if ((int) peers.size() >= kMaxPeers) return;
+            lastSeq[d.peer.id] = { d.session, d.seq, d.sentMs, senderIP, now };
+        }
+        else if (st->second.session == d.session)
+        {
+            auto& s = st->second;
+            const bool fromPinned = senderIP == s.pinnedIp;
+            if (fromPinned) s.pinnedSeenMs = now;        // copies (multicast + broadcast) keep it alive
+            if (d.seq <= s.seq) return;                  // duplicate or replay
+            if (! fromPinned && now - s.pinnedSeenMs < (uint32) kPeerTimeoutMs)
+                return;                                  // another address while the pinned one is alive
+            s.seq = d.seq;
+            s.pinnedIp = senderIP;                       // (re-pin only once the old address went silent)
+            s.pinnedSeenMs = now;
+        }
+        else
+        {
+            // a new run of that node: only if it is newer than what we accepted before
+            if (d.sentMs <= st->second.sentMs) return;
+            st->second = { d.session, d.seq, d.sentMs, senderIP, now };
+        }
+
+        d.peer.ip = lastSeq[d.peer.id].pinnedIp;
+        d.peer.lastSeenMs = now;
 
         auto it = peers.find (d.peer.id);
         if (it == peers.end())
@@ -429,6 +461,25 @@ void Discovery::prune()
                 changed = true;
             }
             else ++it;
+        }
+
+        // replay state outlives the peer (so an old run of a node that went offline can't be
+        // replayed), but not forever: an hour of silence, and a hard cap against floods
+        for (auto it = lastSeq.begin(); it != lastSeq.end();)
+        {
+            if (now - it->second.pinnedSeenMs > 3600u * 1000u && peers.count (it->first) == 0)
+                it = lastSeq.erase (it);
+            else ++it;
+        }
+        while ((int) lastSeq.size() > kMaxPeers * 4)
+        {
+            auto oldest = lastSeq.end();
+            for (auto it = lastSeq.begin(); it != lastSeq.end(); ++it)
+                if (peers.count (it->first) == 0
+                     && (oldest == lastSeq.end() || it->second.pinnedSeenMs < oldest->second.pinnedSeenMs))
+                    oldest = it;
+            if (oldest == lastSeq.end()) break;
+            lastSeq.erase (oldest);
         }
     }
     if (changed) triggerAsyncUpdate();

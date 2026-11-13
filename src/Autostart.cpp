@@ -9,6 +9,32 @@ namespace
 {
     File executable() { return File::getSpecialLocation (File::currentExecutableFile); }
 
+    /** A path as one quoted argument of a desktop entry Exec key: the reserved characters
+        " ` $ \ are backslash-escaped inside the quotes, and every backslash is doubled
+        again because the value itself is an escaped string (Desktop Entry spec). */
+    String desktopExecArg (const String& path)
+    {
+        String quoted;
+        for (auto c : path)
+        {
+            if (c == '"' || c == '`' || c == '$' || c == '\\') quoted << "\\\\";
+            quoted << String::charToString (c);
+        }
+        return "\"" + quoted + "\"";
+    }
+
+    /** A plain desktop entry string value (Icon=). */
+    String desktopValue (const String& s) { return s.replace ("\\", "\\\\"); }
+
+    /** Line breaks would start a new key: never write such a path. */
+    bool safeForDesktopEntry (const String& path) { return ! path.containsAnyOf ("\r\n"); }
+
+    String xmlEscape (const String& s)
+    {
+        return s.replace ("&", "&amp;").replace ("<", "&lt;").replace (">", "&gt;")
+                .replace ("\"", "&quot;").replace ("'", "&apos;");
+    }
+
    #if JUCE_WINDOWS
     const String kRunKey = "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SoundFunnel";
    #elif JUCE_MAC
@@ -49,16 +75,17 @@ bool Autostart::setEnabled (bool on)
           << "<plist version=\"1.0\"><dict>\n"
           << "<key>Label</key><string>io.github.wtnbgo.soundfunnel</string>\n"
           << "<key>ProgramArguments</key><array><string>/usr/bin/open</string><string>-a</string><string>"
-          << appBundle().getFullPathName() << "</string><string>--args</string><string>--background</string></array>\n"
+          << xmlEscape (appBundle().getFullPathName()) << "</string><string>--args</string><string>--background</string></array>\n"
           << "<key>RunAtLoad</key><true/>\n"
           << "</dict></plist>\n";
     plistFile().getParentDirectory().createDirectory();
     return plistFile().replaceWithText (plist, false, false, "\n");
    #else
     if (! on) return desktopFile().deleteFile();
+    if (! safeForDesktopEntry (executable().getFullPathName())) return false;
     String d;
     d << "[Desktop Entry]\nType=Application\nName=SoundFunnel\n"
-      << "Exec=\"" << executable().getFullPathName() << "\" --background\n"
+      << "Exec=" << desktopExecArg (executable().getFullPathName()) << " --background\n"
       << "StartupWMClass=SoundFunnel\n"
       << "X-GNOME-Autostart-enabled=true\n";
     desktopFile().getParentDirectory().createDirectory();
@@ -73,6 +100,8 @@ void Autostart::ensureDesktopEntry()
     for (auto* sys : { "/usr/share/applications/soundfunnel.desktop", "/usr/local/share/applications/soundfunnel.desktop" })
         if (File (sys).existsAsFile() && executable().getFullPathName().startsWith ("/usr"))
             return;
+
+    if (! safeForDesktopEntry (executable().getFullPathName())) return;
 
     const auto home = File::getSpecialLocation (File::userHomeDirectory);
     auto icon = home.getChildFile (".local/share/icons/hicolor/256x256/apps/soundfunnel.png");
@@ -90,8 +119,8 @@ void Autostart::ensureDesktopEntry()
     String d;
     d << "[Desktop Entry]\nType=Application\nName=SoundFunnel\n"
       << "Comment=Gather audio from several PCs on a LAN onto one server PC\n"
-      << "Exec=\"" << executable().getFullPathName() << "\"\n"
-      << "Icon=" << icon.getFullPathName() << "\n"
+      << "Exec=" << desktopExecArg (executable().getFullPathName()) << "\n"
+      << "Icon=" << desktopValue (icon.getFullPathName()) << "\n"
       << "StartupWMClass=SoundFunnel\n"
       << "Categories=AudioVideo;Audio;\nTerminal=false\n";
 

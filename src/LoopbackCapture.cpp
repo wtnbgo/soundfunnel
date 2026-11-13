@@ -18,7 +18,10 @@ void LoopbackCapture::start (const String& deviceName, Callback cb)
 
 void LoopbackCapture::stop()
 {
-    stopThread (3000);
+    // the capture loop checks for exit every few ms (Windows / Linux) or every second (macOS);
+    // a forced kill would skip its clean-up (the macOS IOProc would outlive its owner)
+    if (! stopThread (10000))
+        Logger::writeToLog ("loopback: capture thread did not stop in time");
     const ScopedLock sl (infoLock);
     description.clear();
 }

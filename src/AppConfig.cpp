@@ -2,6 +2,9 @@
 #include "AppConfig.h"
 #include "Codecs.h"
 #include "LoopbackCapture.h"
+#if ! JUCE_WINDOWS
+ #include <sys/stat.h>
+#endif
 
 using namespace juce;
 
@@ -24,7 +27,7 @@ AppConfig::AppConfig (const String& p) : profile (p)
     {
         nodeId = Uuid().toDashedString();
         props->setValue ("nodeId", nodeId);
-        props->saveIfNeeded();
+        save();
     }
 }
 
@@ -99,4 +102,17 @@ void AppConfig::setAudioDeviceState (const XmlElement* x)
     if (x != nullptr) props->setValue ("audioDevice", x);
 }
 
-void AppConfig::save() { props->saveIfNeeded(); }
+void AppConfig::save()
+{
+    props->saveIfNeeded();
+   #if ! JUCE_WINDOWS
+    // the file holds the group key: keep it (and its folder) private to the user.
+    // PropertiesFile writes through a temporary file, so re-apply after every save.
+    auto f = props->getFile();
+    if (f.existsAsFile())
+    {
+        chmod (f.getFullPathName().toRawUTF8(), 0600);
+        chmod (f.getParentDirectory().getFullPathName().toRawUTF8(), 0700);
+    }
+   #endif
+}

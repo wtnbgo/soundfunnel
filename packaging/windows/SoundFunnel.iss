@@ -69,7 +69,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""SoundFunnel"""; Flags: runhidden; Tasks: firewall
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""SoundFunnel"" dir=in action=allow protocol=UDP profile=private,domain program=""{app}\SoundFunnel.exe"" enable=yes"; \
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""SoundFunnel"" dir=in action=allow protocol=UDP profile=private,domain remoteip=localsubnet program=""{app}\SoundFunnel.exe"" enable=yes"; \
     Flags: runhidden; Tasks: firewall
 Filename: "{app}\SoundFunnel.exe"; Description: "{cm:LaunchNow}"; Flags: nowait postinstall skipifsilent
 

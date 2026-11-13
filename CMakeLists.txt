@@ -32,8 +32,8 @@ if (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";")
 endif()
 FetchContent_Declare(opus
     GIT_REPOSITORY https://github.com/xiph/opus.git
-    GIT_TAG        v1.5.2
-    GIT_SHALLOW    TRUE)
+    GIT_TAG        ddbe48383984d56acd9e1ab6a090c54ca6b735a6   # v1.5.2, pinned to the commit
+    GIT_PROGRESS   FALSE)
 FetchContent_MakeAvailable(opus)
 
 # AOO includes <opus/opus_multistream.h>; expose the headers under an opus/ prefix
