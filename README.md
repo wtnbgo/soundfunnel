@@ -95,6 +95,8 @@ macOS 14.2 より前では「システムの音」を選べません。[BlackHol
 
 Linux の「システムの音」は PulseAudio か PipeWire（pipewire-pulse）が動いている環境で使えます
 （`libpulse-simple` を使います。ほとんどのデスクトップ環境に入っています）。
+手元のスピーカーでは鳴らさずに送りたいときは、どこにも鳴らない仮想の出力デバイスを作って既定の出力にします。
+手順は [docs/LINUX_VIRTUAL_SINK.md](docs/LINUX_VIRTUAL_SINK.md) を見てください。
 
 ### 送信形式
 
